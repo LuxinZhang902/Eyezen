@@ -1,0 +1,139 @@
+version: '3.8'
+
+services:
+  # Main EyeZen API Service
+  eyezen-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: eyezen-api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - REDIS_URL=redis://redis:6379
+      - MONGODB_URL=mongodb://mongo:27017/eyezen
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key}
+      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret}
+      - CORS_ORIGIN=${CORS_ORIGIN:-chrome-extension://}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+      - mongo
+    restart: unless-stopped
+    networks:
+      - eyezen-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    container_name: eyezen-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-eyezen123}
+    restart: unless-stopped
+    networks:
+      - eyezen-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # MongoDB for persistent data storage
+  mongo:
+    image: mongo:6
+    container_name: eyezen-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME:-eyezen}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-eyezen123}
+      - MONGO_INITDB_DATABASE=eyezen
+    volumes:
+      - mongo-data:/data/db
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    restart: unless-stopped
+    networks:
+      - eyezen-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/eyezen --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: eyezen-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - eyezen-api
+    restart: unless-stopped
+    networks:
+      - eyezen-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Development service (for local development)
+  eyezen-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: eyezen-dev
+    ports:
+      - "3001:3000"
+      - "9229:9229" # Debug port
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - REDIS_URL=redis://redis:6379
+      - MONGODB_URL=mongodb://mongo:27017/eyezen-dev
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key}
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+      - mongo
+    command: npm run dev
+    networks:
+      - eyezen-network
+    profiles:
+      - dev
+
+volumes:
+  redis-data:
+    driver: local
+  mongo-data:
+    driver: local
+
+networks:
+  eyezen-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

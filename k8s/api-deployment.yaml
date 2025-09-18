@@ -1,0 +1,148 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eyezen-api
+  namespace: eyezen
+  labels:
+    app: eyezen-api
+    version: v1
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: eyezen-api
+  template:
+    metadata:
+      labels:
+        app: eyezen-api
+        version: v1
+    spec:
+      serviceAccountName: eyezen-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+      - name: eyezen-api
+        image: eyezen/api:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3000"
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: eyezen-secrets
+              key: redis-url
+        - name: MONGODB_URL
+          valueFrom:
+            secretKeyRef:
+              name: eyezen-secrets
+              key: mongodb-url
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: eyezen-secrets
+              key: openai-api-key
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: eyezen-secrets
+              key: jwt-secret
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: app-data
+          mountPath: /app/data
+        - name: app-logs
+          mountPath: /app/logs
+      volumes:
+      - name: app-data
+        persistentVolumeClaim:
+          claimName: eyezen-data-pvc
+      - name: app-logs
+        emptyDir: {}
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eyezen-api-service
+  namespace: eyezen
+  labels:
+    app: eyezen-api
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app: eyezen-api
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eyezen-api
+  namespace: eyezen
+  labels:
+    app: eyezen-api
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: eyezen-data-pvc
+  namespace: eyezen
+  labels:
+    app: eyezen-api
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: fast-ssd

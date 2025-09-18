@@ -1,0 +1,27 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="24" cy="24" r="22" fill="#f0f9ff" stroke="#0ea5e9" stroke-width="2"/>
+  
+  <!-- Eye shape -->
+  <ellipse cx="24" cy="24" rx="18" ry="10" fill="#0ea5e9" stroke="#075985" stroke-width="1.5"/>
+  
+  <!-- Pupil -->
+  <circle cx="24" cy="24" r="5" fill="#1e293b"/>
+  
+  <!-- Iris detail -->
+  <circle cx="24" cy="24" r="7" fill="none" stroke="#334155" stroke-width="0.5" opacity="0.3"/>
+  
+  <!-- Highlight -->
+  <circle cx="26" cy="22" r="2" fill="#ffffff" opacity="0.9"/>
+  <circle cx="27" cy="21" r="0.8" fill="#ffffff" opacity="0.6"/>
+  
+  <!-- Zen symbol -->
+  <circle cx="24" cy="6" r="1.5" fill="#22c55e"/>
+  <circle cx="24" cy="6" r="2.5" fill="none" stroke="#22c55e" stroke-width="0.5" opacity="0.5"/>
+  
+  <!-- Eyelashes -->
+  <path d="M8 18 L5 15 M10 15 L7 12 M12 14 L10 11 M40 18 L43 15 M38 15 L41 12 M36 14 L38 11" stroke="#075985" stroke-width="1" stroke-linecap="round"/>
+  
+  <!-- Bottom eyelashes -->
+  <path d="M8 30 L5 33 M10 33 L7 36 M12 34 L10 37 M40 30 L43 33 M38 33 L41 36 M36 34 L38 37" stroke="#075985" stroke-width="1" stroke-linecap="round"/>
+</svg>

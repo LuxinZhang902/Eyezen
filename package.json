@@ -1,0 +1,55 @@
+{
+  "name": "eyezen-chrome-extension",
+  "version": "1.0.0",
+  "description": "EyeZen - AI-powered eye health monitoring Chrome extension with fatigue detection and break reminders",
+  "main": "index.js",
+  "scripts": {
+    "build": "webpack --mode=production",
+    "dev": "webpack --mode=development --watch",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write \"**/*.{ts,tsx,json,css,md}\""
+  },
+  "keywords": [
+    "chrome-extension",
+    "eye-health",
+    "fatigue-detection",
+    "computer-vision",
+    "wellness",
+    "break-reminders"
+  ],
+  "author": "EyeZen Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "@types/react": "^18.2.79",
+    "@types/react-dom": "^18.2.25",
+    "@typescript-eslint/eslint-plugin": "^7.7.1",
+    "@typescript-eslint/parser": "^7.7.1",
+    "autoprefixer": "^10.4.19",
+    "copy-webpack-plugin": "^12.0.2",
+    "css-loader": "^7.1.1",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.34.1",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "html-webpack-plugin": "^5.6.0",
+    "mini-css-extract-plugin": "^2.9.0",
+    "postcss": "^8.4.38",
+    "postcss-loader": "^8.1.1",
+    "prettier": "^3.2.5",
+    "tailwindcss": "^3.4.3",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.4.5",
+    "webpack": "^5.91.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.8",
+    "chart.js": "^4.4.2",
+    "dexie": "^4.0.7",
+    "react": "^18.3.1",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.23.0"
+  }
+}

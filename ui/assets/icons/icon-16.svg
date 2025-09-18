@@ -1,0 +1,13 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Eye shape -->
+  <ellipse cx="8" cy="8" rx="7" ry="4" fill="#0ea5e9" stroke="#075985" stroke-width="0.5"/>
+  
+  <!-- Pupil -->
+  <circle cx="8" cy="8" r="2" fill="#1e293b"/>
+  
+  <!-- Highlight -->
+  <circle cx="9" cy="7" r="0.8" fill="#ffffff" opacity="0.8"/>
+  
+  <!-- Zen symbol (small dot) -->
+  <circle cx="8" cy="2" r="0.5" fill="#22c55e"/>
+</svg>

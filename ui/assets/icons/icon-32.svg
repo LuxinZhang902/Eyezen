@@ -1,0 +1,16 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Eye shape -->
+  <ellipse cx="16" cy="16" rx="14" ry="8" fill="#0ea5e9" stroke="#075985" stroke-width="1"/>
+  
+  <!-- Pupil -->
+  <circle cx="16" cy="16" r="4" fill="#1e293b"/>
+  
+  <!-- Highlight -->
+  <circle cx="18" cy="14" r="1.6" fill="#ffffff" opacity="0.8"/>
+  
+  <!-- Zen symbol (small dot) -->
+  <circle cx="16" cy="4" r="1" fill="#22c55e"/>
+  
+  <!-- Eyelashes (decorative) -->
+  <path d="M4 12 L2 10 M6 10 L4 8 M28 12 L30 10 M26 10 L28 8" stroke="#075985" stroke-width="0.8" stroke-linecap="round"/>
+</svg>

@@ -4,7 +4,7 @@
  */
 
 import { ChromeStorageService } from '../core/storage/index';
-import { BreakType, UserStatus, BreakSession, UserData, EyeScore } from '../types/index';
+import { BreakType, UserStatus, BreakSession, UserData, EyeScore, UserSettings, DEFAULT_SETTINGS } from '../types/index';
 
 // Constants
 const ALARM_NAMES = {
@@ -152,14 +152,14 @@ class BackgroundService {
   private async setupDefaultAlarms() {
     try {
       const userData = await ChromeStorageService.getUserData();
-      const settings = userData?.settings || {};
+      const settings: UserSettings = userData?.settings || DEFAULT_SETTINGS;
       
       // Clear existing alarms
       await chrome.alarms.clearAll();
       
       // Set up break reminder alarm
-      if (settings.reminderEnabled !== false) {
-        const interval = settings.reminderInterval || DEFAULT_INTERVALS.BREAK_REMINDER;
+      if (settings.reminderEnabled ?? true) {
+        const interval = settings.reminderInterval ?? DEFAULT_INTERVALS.BREAK_REMINDER;
         await chrome.alarms.create(ALARM_NAMES.BREAK_REMINDER, {
           delayInMinutes: interval,
           periodInMinutes: interval
@@ -167,7 +167,7 @@ class BackgroundService {
       }
       
       // Set up posture check alarm
-      if (settings.reminderEnabled !== false) {
+      if (settings.reminderEnabled ?? true) {
         await chrome.alarms.create(ALARM_NAMES.POSTURE_CHECK, {
           delayInMinutes: DEFAULT_INTERVALS.POSTURE_CHECK,
           periodInMinutes: DEFAULT_INTERVALS.POSTURE_CHECK
@@ -470,14 +470,20 @@ class BackgroundService {
         ...options
       };
       
-      await chrome.notifications.create(notificationId, {
-        type: 'basic',
-        iconUrl: 'assets/icons/icon-48.svg',
-        title: notificationOptions.title,
-        message: notificationOptions.message,
-        priority: notificationOptions.priority,
-        buttons: notificationOptions.buttons
-      });
+      // Create notification with required properties only
+      const createOptions = {
+        type: 'basic' as const,
+        iconUrl: notificationOptions.iconUrl || 'assets/icons/icon-48.svg',
+        title: notificationOptions.title || 'EyeZen',
+        message: notificationOptions.message || ''
+      };
+      
+      // Add optional properties if they exist
+      if (notificationOptions.buttons) {
+        (createOptions as any).buttons = notificationOptions.buttons;
+      }
+      
+      await chrome.notifications.create(notificationId, createOptions);
       
       // Auto-clear notification after 10 seconds for low priority
       if ((options.priority || 0) === 0) {

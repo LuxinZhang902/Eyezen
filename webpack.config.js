@@ -8,9 +8,9 @@ module.exports = (env, argv) => {
   
   return {
     entry: {
-      popup: './extension/popup/index.tsx',
-      options: './extension/options/index.tsx',
-      background: './extension/background/service-worker.ts',
+      popup: './ui/popup.tsx',
+      options: './ui/options.tsx',
+      background: './background/service-worker.ts',
       'cv-worker': './core/cv-worker/worker.ts'
     },
     output: {
@@ -61,12 +61,12 @@ module.exports = (env, argv) => {
         filename: '[name].css'
       }),
       new HtmlWebpackPlugin({
-        template: './extension/popup/popup.html',
+        template: './ui/popup.html',
         filename: 'popup.html',
         chunks: ['popup']
       }),
       new HtmlWebpackPlugin({
-        template: './extension/options/options.html',
+        template: './ui/options.html',
         filename: 'options.html',
         chunks: ['options']
       }),

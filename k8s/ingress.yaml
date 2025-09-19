@@ -30,7 +30,7 @@ metadata:
       more_set_headers "X-Frame-Options: DENY";
       more_set_headers "X-XSS-Protection: 1; mode=block";
       more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
-      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.openai.com";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'";
     
     # Load balancing
     nginx.ingress.kubernetes.io/upstream-hash-by: "$request_uri"
@@ -154,7 +154,7 @@ spec:
     - protocol: TCP
       port: 27017
   
-  # Allow egress to OpenAI API
+  # Chrome AI - No external API calls needed
   - to: []
     ports:
     - protocol: TCP

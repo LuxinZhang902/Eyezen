@@ -119,7 +119,7 @@ Build a Chrome Extension (Manifest V3) called "EyeZen" using TypeScript, React, 
 2. Implement a **Dashboard (Options page)** with daily KPIs, Eye Score, goal tracking, weekly summary (via Summarizer API), and settings.
 3. Run a **CV Worker** using MediaPipe Face Landmarker (WASM) to compute EAR/PERCLOS from camera frames, outputting metrics (blinkRate, fatigueIndex, posture). Ensure frames are closed immediately.
 4. Use a **Background service worker** with chrome.alarms to trigger 20-20-20 reminders and handle notifications. This is for when the user chooses not detect, but a set time of alarm
-5. Integrate **Writer/Rewriter API** using OpenAI API to generate break coaching scripts, **Summarizer API** for weekly digests, and **Translator API** for multilingual support.
+5. Integrate **Writer/Rewriter API** using Chrome's built-in AI to generate break coaching scripts, **Summarizer API** for weekly digests, and **Translator API** for multilingual support.
 6. Break Ritual screen should show: 20-20-20 timer, TCM massage guide (Zan Zhu, Si Bai, Jing Ming) with simple animations, hydration nudge, and AI-generated script. Optionally, use Web Speech API for audio.
 7. Store user data and events (alerts, breaks, massages, hydration) in chrome.storage.local + IndexedDB, with a simple scoring model (0-100).
 8. Include privacy features: camera ON/OFF toggle, erase all data button, metrics-only storage.

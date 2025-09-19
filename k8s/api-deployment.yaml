@@ -50,11 +50,12 @@ spec:
             secretKeyRef:
               name: eyezen-secrets
               key: mongodb-url
-        - name: OPENAI_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: eyezen-secrets
-              key: openai-api-key
+        # Chrome AI - No API key needed
+            # - name: OPENAI_API_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: eyezen-secrets
+            #       key: openai-api-key
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:

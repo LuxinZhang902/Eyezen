@@ -143,14 +143,22 @@ export interface UserEvent {
   severity?: 'low' | 'medium' | 'high';
 }
 
-// API and external service types
-export interface OpenAIRequest {
-  model: string;
-  messages: ChatMessage[];
-  temperature?: number;
-  max_tokens?: number;
+// Chrome AI API types
+export interface ChromeAIMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
 }
 
+export interface ChromeAICapabilities {
+  available: 'readily' | 'after-download' | 'no';
+}
+
+export interface ChromeAISession {
+  prompt(input: string | ChromeAIMessage[]): Promise<string>;
+  destroy(): void;
+}
+
+// Legacy types for backward compatibility
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;

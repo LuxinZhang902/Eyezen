@@ -15,7 +15,9 @@ services:
       - PORT=3000
       - REDIS_URL=redis://redis:6379
       - MONGODB_URL=mongodb://mongo:27017/eyezen
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key}
+      # Chrome AI - No API key needed
+      # # Chrome AI - No API key needed
+        # - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key}
       - JWT_SECRET=${JWT_SECRET:-your-jwt-secret}
       - CORS_ORIGIN=${CORS_ORIGIN:-chrome-extension://}
     volumes:
@@ -112,7 +114,8 @@ services:
       - PORT=3000
       - REDIS_URL=redis://redis:6379
       - MONGODB_URL=mongodb://mongo:27017/eyezen-dev
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key}
+      # Chrome AI - No API key needed
+      # - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key}
     volumes:
       - .:/app
       - /app/node_modules

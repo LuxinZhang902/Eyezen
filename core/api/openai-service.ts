@@ -1,32 +1,79 @@
 /**
- * OpenAI API Service
- * Handles AI-powered features: coaching scripts, weekly summaries, and translations
+ * Chrome AI Service
+ * Handles AI-powered features using Chrome's built-in Gemini Nano model
+ * Replaces OpenAI API with Chrome's Prompt API for coaching scripts, weekly summaries, and translations
  */
 
-import { OpenAIRequest, ChatMessage, CoachingScript, WeeklySummary, UserData } from '../../types/index';
+import { CoachingScript, WeeklySummary, UserData } from '../../types/index';
 
-export class OpenAIService {
-  private static readonly API_BASE_URL = 'https://api.openai.com/v1';
-  private static readonly DEFAULT_MODEL = 'gpt-3.5-turbo';
-  private static readonly MAX_RETRIES = 3;
-  private static readonly TIMEOUT_MS = 30000;
+// Chrome AI API types
+declare global {
+  interface Window {
+    ai?: {
+      languageModel?: {
+        capabilities(): Promise<{
+          available: 'readily' | 'after-download' | 'no';
+        }>;
+        create(options?: {
+          temperature?: number;
+          topK?: number;
+          signal?: AbortSignal;
+          monitor?: (monitor: any) => void;
+          initialPrompts?: Array<{
+            role: 'system' | 'user' | 'assistant';
+            content: string;
+          }>;
+        }): Promise<{
+          prompt(input: string | Array<{ role: 'system' | 'user' | 'assistant'; content: string; }>): Promise<string>;
+          destroy(): void;
+        }>;
+      };
+    };
+  }
+}
 
-  private static apiKey: string | null = null;
+export class ChromeAIService {
+  private static session: any = null;
+  private static isInitialized = false;
+  private static readonly DEFAULT_TEMPERATURE = 0.7;
+  private static readonly DEFAULT_TOP_K = 3;
 
   /**
-   * Initialize the service with API key
+   * Initialize the Chrome AI service
    */
   static async initialize(): Promise<void> {
     try {
-      // In a real implementation, you'd get this from secure storage or environment
-      // For demo purposes, we'll use a placeholder
-      this.apiKey = process.env.OPENAI_API_KEY || 'your-openai-api-key-here';
-      
-      if (!this.apiKey || this.apiKey === 'your-openai-api-key-here') {
-        console.warn('OpenAI API key not configured. AI features will use mock data.');
+      if (!window.ai?.languageModel) {
+        console.warn('Chrome AI not available. AI features will use mock data.');
+        return;
       }
+
+      const capabilities = await window.ai.languageModel.capabilities();
+      
+      if (capabilities.available === 'no') {
+        console.warn('Chrome AI model not available. AI features will use mock data.');
+        return;
+      }
+
+      if (capabilities.available === 'after-download') {
+        console.log('Chrome AI model downloading...');
+      }
+
+      // Create a session for general use
+      this.session = await window.ai.languageModel.create({
+        temperature: this.DEFAULT_TEMPERATURE,
+        topK: this.DEFAULT_TOP_K,
+        monitor: (m) => {
+          m.addEventListener('downloadprogress', (e: any) => {
+            console.log(`Chrome AI model download progress: ${Math.round(e.loaded * 100)}%`);
+          });
+        }
+      });
+
+      this.isInitialized = true;
+      console.log('Chrome AI service initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize OpenAI service:', error);
+      console.error('Failed to initialize Chrome AI service:', error);
     }
   }
 
@@ -43,33 +90,24 @@ export class OpenAIService {
     }
   ): Promise<CoachingScript> {
     try {
-      if (!this.apiKey || this.apiKey === 'your-openai-api-key-here') {
+      if (!this.isInitialized || !this.session) {
         return this.getMockCoachingScript(type, userContext.language);
       }
 
       const prompt = this.buildCoachingPrompt(type, userContext);
-      const response = await this.makeAPIRequest({
-        model: this.DEFAULT_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an expert eye health coach specializing in Traditional Chinese Medicine and modern ergonomics. Generate helpful, encouraging, and practical coaching scripts.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 200
-      });
+      const systemPrompt = 'You are an expert eye health coach specializing in Traditional Chinese Medicine and modern ergonomics. Generate helpful, encouraging, and practical coaching scripts.';
+      
+      const response = await this.session.prompt([
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ]);
 
-      const content = response.choices[0]?.message?.content || this.getMockCoachingScript(type, userContext.language).content;
+      const content = response?.trim() || this.getMockCoachingScript(type, userContext.language).content;
 
       return {
         id: Date.now().toString(),
         type,
-        content: content.trim(),
+        content: content.substring(0, 300), // Limit content length
         duration: this.estimateDuration(content),
         language: userContext.language,
         generated: Date.now()
@@ -85,7 +123,7 @@ export class OpenAIService {
    */
   static async generateWeeklySummary(userData: UserData): Promise<WeeklySummary> {
     try {
-      if (!this.apiKey || this.apiKey === 'your-openai-api-key-here') {
+      if (!this.isInitialized || !this.session) {
         return this.getMockWeeklySummary(userData);
       }
 
@@ -103,23 +141,14 @@ export class OpenAIService {
         currentScore: userData.score
       });
 
-      const response = await this.makeAPIRequest({
-        model: this.DEFAULT_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an eye health analyst. Analyze weekly data and provide actionable insights, improvements, and recommendations in a supportive tone.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.5,
-        max_tokens: 400
-      });
+      const systemPrompt = 'You are an eye health analyst. Analyze weekly data and provide actionable insights, improvements, and recommendations in a supportive tone.';
+      
+      const response = await this.session.prompt([
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ]);
 
-      const analysis = response.choices[0]?.message?.content || '';
+      const analysis = response || '';
       const parsedAnalysis = this.parseWeeklySummary(analysis);
 
       return {
@@ -143,27 +172,19 @@ export class OpenAIService {
    */
   static async translateText(text: string, targetLanguage: string): Promise<string> {
     try {
-      if (!this.apiKey || this.apiKey === 'your-openai-api-key-here') {
+      if (!this.isInitialized || !this.session) {
         return `[${targetLanguage.toUpperCase()}] ${text}`; // Mock translation
       }
 
-      const response = await this.makeAPIRequest({
-        model: this.DEFAULT_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: `You are a professional translator. Translate the following text to ${targetLanguage}. Maintain the tone and context, especially for health and wellness content.`
-          },
-          {
-            role: 'user',
-            content: text
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 300
-      });
+      const prompt = `Translate the following text to ${targetLanguage}. Maintain the tone and context, especially for health and wellness content: "${text}"`;
+      const systemPrompt = 'You are a professional translator. Provide accurate translations while maintaining the original meaning and tone.';
+      
+      const response = await this.session.prompt([
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ]);
 
-      return response.choices[0]?.message?.content?.trim() || text;
+      return response?.trim() || text;
     } catch (error) {
       console.error('Failed to translate text:', error);
       return text;
@@ -178,7 +199,7 @@ export class OpenAIService {
     style: 'formal' | 'casual' | 'encouraging' | 'concise'
   ): Promise<string> {
     try {
-      if (!this.apiKey || this.apiKey === 'your-openai-api-key-here') {
+      if (!this.isInitialized || !this.session) {
         return `[${style.toUpperCase()}] ${text}`; // Mock rewrite
       }
 
@@ -189,23 +210,15 @@ export class OpenAIService {
         concise: 'Rewrite this text to be more concise while keeping the key message'
       };
 
-      const response = await this.makeAPIRequest({
-        model: this.DEFAULT_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: `${stylePrompts[style]}. Maintain the original meaning and context.`
-          },
-          {
-            role: 'user',
-            content: text
-          }
-        ],
-        temperature: 0.4,
-        max_tokens: 250
-      });
+      const prompt = `${stylePrompts[style]}. Maintain the original meaning and context: "${text}"`;
+      const systemPrompt = 'You are a skilled writer. Rewrite text according to the specified style while preserving the original meaning.';
+      
+      const response = await this.session.prompt([
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ]);
 
-      return response.choices[0]?.message?.content?.trim() || text;
+      return response?.trim() || text;
     } catch (error) {
       console.error('Failed to rewrite text:', error);
       return text;
@@ -213,33 +226,17 @@ export class OpenAIService {
   }
 
   /**
-   * Make API request to OpenAI
+   * Destroy the current session and cleanup
    */
-  private static async makeAPIRequest(request: OpenAIRequest): Promise<any> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.TIMEOUT_MS);
-
-    try {
-      const response = await fetch(`${this.API_BASE_URL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify(request),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+  static destroy(): void {
+    if (this.session) {
+      try {
+        this.session.destroy();
+      } catch (error) {
+        console.error('Error destroying Chrome AI session:', error);
       }
-
-      return await response.json();
-    } catch (error) {
-      clearTimeout(timeoutId);
-      throw error;
+      this.session = null;
+      this.isInitialized = false;
     }
   }
 
@@ -376,4 +373,8 @@ Format as JSON: {"improvements": ["..."], "recommendations": ["..."]}`;
 }
 
 // Initialize the service
-OpenAIService.initialize();
+ChromeAIService.initialize();
+
+// Export as OpenAIService for backward compatibility
+export const OpenAIService = ChromeAIService;
+export default ChromeAIService;

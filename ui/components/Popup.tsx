@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { UserStatus, EyeScore, BreakType } from '../../types/index';
 import { ChromeStorageService } from '../../core/storage/index';
 import { EyeHealthScorer } from '../../core/metrics/index';
+import CameraPermissionPopup from './CameraPermissionPopup';
 
 interface PopupProps {
   onStartBreak: (breakType: BreakType) => void;
@@ -20,6 +21,8 @@ interface PopupState {
   cameraEnabled: boolean;
   lastBreakTime: number | null;
   streakDays: number;
+  showCameraPermissionPopup: boolean;
+  isFeatureRestricted: boolean;
 }
 
 const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProps) => {
@@ -34,7 +37,9 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     isLoading: true,
     cameraEnabled: true,
     lastBreakTime: null,
-    streakDays: 0
+    streakDays: 0,
+    showCameraPermissionPopup: false,
+    isFeatureRestricted: false
   });
 
   useEffect(() => {
@@ -48,7 +53,14 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
 
   const loadUserData = async () => {
     try {
-      const userData = await ChromeStorageService.getUserData();
+      let userData = await ChromeStorageService.getUserData();
+      
+      // Initialize storage if no user data exists
+      if (!userData) {
+        await ChromeStorageService.initialize();
+        userData = await ChromeStorageService.getUserData();
+      }
+      
       if (userData) {
         // Calculate current eye health score
         const recentMetrics = userData.metrics.slice(-10);
@@ -76,7 +88,9 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
           isLoading: false,
           cameraEnabled: userData.settings.cameraEnabled,
           lastBreakTime: lastBreak?.endTime || null,
-          streakDays
+          streakDays,
+          showCameraPermissionPopup: false, // Only show when explicitly triggered
+          isFeatureRestricted: userData.settings.metricsOnly
         });
       }
     } catch (error) {
@@ -185,28 +199,87 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
 
   const toggleCamera = async () => {
     try {
-      await ChromeStorageService.updateSettings({
-        cameraEnabled: !state.cameraEnabled
-      });
-      setState((prev: PopupState) => ({
-        ...prev,
-        cameraEnabled: !prev.cameraEnabled
-      }));
+      const settings = await ChromeStorageService.getSettings();
+      const newCameraEnabled = !settings.cameraEnabled;
+      
+      // If enabling camera, show permission popup
+      if (newCameraEnabled) {
+        setState(prev => ({
+          ...prev,
+          showCameraPermissionPopup: true
+        }));
+      } else {
+        // If disabling camera, update settings directly
+        await ChromeStorageService.updateSettings({
+          cameraEnabled: false
+        });
+        
+        setState(prev => ({
+          ...prev,
+          cameraEnabled: false,
+          showCameraPermissionPopup: false
+        }));
+      }
     } catch (error) {
       console.error('Failed to toggle camera:', error);
     }
   };
 
+  const handleCameraPermissionApprove = async () => {
+    try {
+      await ChromeStorageService.updateSettings({
+        cameraEnabled: true,
+        metricsOnly: false
+      });
+      
+      setState(prev => ({
+        ...prev,
+        cameraEnabled: true,
+        showCameraPermissionPopup: false,
+        isFeatureRestricted: false
+      }));
+    } catch (error) {
+      console.error('Failed to approve camera access:', error);
+    }
+  };
+
+  const handleCameraPermissionReject = async () => {
+    try {
+      await ChromeStorageService.updateSettings({
+        cameraEnabled: false,
+        metricsOnly: true
+      });
+      
+      setState(prev => ({
+        ...prev,
+        cameraEnabled: false,
+        showCameraPermissionPopup: false,
+        isFeatureRestricted: true
+      }));
+    } catch (error) {
+      console.error('Failed to reject camera access:', error);
+    }
+  };
+
   if (state.isLoading) {
     return (
-      <div className="w-80 h-96 bg-white p-6 flex items-center justify-center">
+      <div className="w-[400px] h-[600px] bg-white p-6 flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="w-80 bg-white shadow-lg rounded-lg overflow-hidden">
+    <>
+      {state.showCameraPermissionPopup && (
+         <CameraPermissionPopup
+           isVisible={state.showCameraPermissionPopup}
+           onApprove={handleCameraPermissionApprove}
+           onReject={handleCameraPermissionReject}
+           onClose={() => setState(prev => ({ ...prev, showCameraPermissionPopup: false }))}
+         />
+       )}
+      <div className="w-[400px] bg-white shadow-lg rounded-lg overflow-hidden">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4">
         <div className="flex items-center justify-between">
@@ -224,6 +297,22 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
+        </div>
+        {/* Camera Status Indicator */}
+        <div className="mt-3 flex items-center justify-between text-sm">
+          <div className="flex items-center space-x-2">
+            <div className={`w-2 h-2 rounded-full ${
+              state.cameraEnabled && !state.isFeatureRestricted ? 'bg-green-400' : 'bg-red-400'
+            }`}></div>
+            <span className="text-blue-100">
+              Camera: {state.cameraEnabled && !state.isFeatureRestricted ? 'Active' : 'Inactive'}
+            </span>
+          </div>
+          {state.isFeatureRestricted && (
+            <span className="text-yellow-300 text-xs px-2 py-1 bg-yellow-600 bg-opacity-30 rounded">
+              Limited Mode
+            </span>
+          )}
         </div>
       </div>
 
@@ -268,10 +357,20 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       {/* Break Buttons */}
       <div className="p-4 space-y-3">
         <h3 className="text-sm font-medium text-gray-700 mb-2">Take a Break</h3>
+        {state.isFeatureRestricted && (
+          <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-xs text-yellow-700">Camera access rejected. Only alarm features available.</p>
+          </div>
+        )}
         
         <button
           onClick={() => handleBreakClick(BreakType.MICRO)}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-between"
+          disabled={state.isFeatureRestricted}
+          className={`w-full py-3 px-4 rounded-lg transition-colors flex items-center justify-between ${
+            state.isFeatureRestricted 
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+              : 'bg-blue-600 hover:bg-blue-700 text-white'
+          }`}
         >
           <div className="flex items-center space-x-2">
             <span className="text-lg">⚡</span>
@@ -287,7 +386,12 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
 
         <button
           onClick={() => handleBreakClick(BreakType.SHORT)}
-          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-between"
+          disabled={state.isFeatureRestricted}
+          className={`w-full py-3 px-4 rounded-lg transition-colors flex items-center justify-between ${
+            state.isFeatureRestricted 
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+              : 'bg-green-600 hover:bg-green-700 text-white'
+          }`}
         >
           <div className="flex items-center space-x-2">
             <span className="text-lg">🧘</span>
@@ -303,7 +407,12 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
 
         <button
           onClick={() => handleBreakClick(BreakType.LONG)}
-          className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-between"
+          disabled={state.isFeatureRestricted}
+          className={`w-full py-3 px-4 rounded-lg transition-colors flex items-center justify-between ${
+            state.isFeatureRestricted 
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+              : 'bg-purple-600 hover:bg-purple-700 text-white'
+          }`}
         >
           <div className="flex items-center space-x-2">
             <span className="text-lg">🌸</span>
@@ -322,15 +431,18 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       <div className="p-4 border-t border-gray-200 bg-gray-50">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600">Camera Monitoring</span>
+            <span className={`text-sm ${state.isFeatureRestricted ? 'text-gray-400' : 'text-gray-600'}`}>Camera Monitoring</span>
             <div className={`w-2 h-2 rounded-full ${
               state.cameraEnabled ? 'bg-green-500' : 'bg-red-500'
             }`}></div>
           </div>
           <button
             onClick={toggleCamera}
+            disabled={state.isFeatureRestricted}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              state.cameraEnabled ? 'bg-blue-600' : 'bg-gray-300'
+              state.isFeatureRestricted 
+                ? 'bg-gray-200 cursor-not-allowed' 
+                : state.cameraEnabled ? 'bg-blue-600' : 'bg-gray-300'
             }`}
           >
             <span
@@ -343,12 +455,24 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
         
         <button
           onClick={onOpenSettings}
-          className="w-full mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+          disabled={state.isFeatureRestricted}
+          className={`w-full mt-3 text-sm font-medium transition-colors ${
+            state.isFeatureRestricted 
+              ? 'text-gray-400 cursor-not-allowed' 
+              : 'text-blue-600 hover:text-blue-700'
+          }`}
         >
           View Dashboard & Settings →
         </button>
+        
+        {state.isFeatureRestricted && (
+          <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs text-blue-700">✓ Set Alarm feature is still available</p>
+          </div>
+        )}
       </div>
     </div>
+    </>
   );
 };
 

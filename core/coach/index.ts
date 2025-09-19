@@ -4,18 +4,17 @@
  */
 
 import { CoachingScript, EyeMetrics, UserSettings, BreakType } from '../../types/index';
+import { ChromeAIService } from '../api/openai-service';
 
 /**
  * AI Coach Service
- * Generates personalized coaching content using OpenAI API
+ * Generates personalized coaching content using Chrome's built-in AI
  */
 export class AICoachService {
-  private apiKey: string;
-  private baseUrl: string = 'https://api.openai.com/v1';
   private scriptCache: Map<string, CoachingScript> = new Map();
 
-  constructor(apiKey: string) {
-    this.apiKey = apiKey;
+  constructor() {
+    // No API key needed for Chrome AI
   }
 
   /**
@@ -39,15 +38,23 @@ export class AICoachService {
 
     try {
       const prompt = this.buildPrompt(breakType, userMetrics, settings);
-      const response = await this.callOpenAI(prompt, settings.language);
+      const response = await ChromeAIService.generateCoachingScript(
+        this.getScriptType(breakType),
+        {
+          fatigueLevel: this.getAverageFatigue(userMetrics),
+          breakCount: this.getDailyBreakCount(),
+          timeOfDay: this.getTimeOfDay(),
+          language: settings.language
+        }
+      );
       
       const script: CoachingScript = {
         id: this.generateId(),
-        type: this.getScriptType(breakType),
+        type: response.type,
         content: response.content,
-        duration: this.calculateDuration(breakType),
-        language: settings.language,
-        generated: Date.now()
+        duration: response.duration,
+        language: response.language,
+        generated: response.generated
       };
 
       // Cache the script
@@ -69,9 +76,9 @@ export class AICoachService {
     settings: UserSettings
   ): Promise<string> {
     try {
-      const prompt = this.buildMotivationalPrompt(eyeHealthScore, streak, settings);
-      const response = await this.callOpenAI(prompt, settings.language);
-      return response.content;
+      const fallbackText = this.getFallbackMotivation(eyeHealthScore, 'en');
+      const response = await ChromeAIService.translateText(fallbackText, settings.language);
+      return response;
     } catch (error) {
       console.error('Failed to generate motivational message:', error);
       return this.getFallbackMotivation(eyeHealthScore, settings.language);
@@ -86,47 +93,45 @@ export class AICoachService {
     settings: UserSettings
   ): Promise<string> {
     try {
-      const prompt = this.buildSummaryPrompt(weeklyData, settings);
-      const response = await this.callOpenAI(prompt, settings.language);
-      return response.content;
+      const response = await ChromeAIService.generateWeeklySummary(weeklyData);
+      return response.improvements.join('\n') + '\n\nRecommendations:\n' + response.recommendations.join('\n');
     } catch (error) {
       console.error('Failed to generate weekly summary:', error);
       return this.getFallbackSummary(weeklyData, settings.language);
     }
   }
 
-  private async callOpenAI(prompt: string, language: string): Promise<{ content: string }> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: `You are an AI eye health coach. Respond in ${language}. Keep responses concise, encouraging, and actionable.`
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 200
-      })
-    });
+  private getAverageFatigue(userMetrics: EyeMetrics[]): number {
+    if (!userMetrics.length) return 0;
+    // Calculate fatigue based on blink rate and fatigue index
+     const totalFatigue = userMetrics.reduce((sum, metric) => {
+       const blinkFatigue = metric.blinkRate < 15 ? 0.8 : 0.2; // Low blink rate indicates fatigue
+       const indexFatigue = metric.fatigueIndex / 100; // Convert to 0-1 scale
+       return sum + Math.max(blinkFatigue, indexFatigue);
+     }, 0);
+    return Math.min(totalFatigue / userMetrics.length, 1);
+  }
 
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
+  private getDailyBreakCount(): number {
+    // Get break count from storage or default to 0
+    return parseInt(localStorage.getItem('dailyBreakCount') || '0');
+  }
+
+  private getTimeOfDay(): string {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'morning';
+    if (hour < 17) return 'afternoon';
+    return 'evening';
+  }
+
+  private async callChromeAI(prompt: string, language: string): Promise<{ content: string }> {
+    // This method is kept for compatibility but uses Chrome AI internally
+    try {
+      const response = await ChromeAIService.translateText(prompt, language);
+      return { content: response };
+    } catch (error) {
+      throw new Error(`Chrome AI error: ${error}`);
     }
-
-    const data = await response.json();
-    return {
-      content: data.choices[0].message.content.trim()
-    };
   }
 
   private buildPrompt(

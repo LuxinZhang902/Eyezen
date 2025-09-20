@@ -6,6 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import { UserStatus, EyeScore, BreakType } from '../../types/index';
 import { ChromeStorageService } from '../../core/storage/index';
+import { ChromeAIService } from '../../core/api/openai-service';
+import { AICoachService } from '../../core/coach/index';
 import { EyeHealthScorer } from '../../core/metrics/index';
 import CameraPermissionPopup from './CameraPermissionPopup';
 
@@ -23,6 +25,9 @@ interface PopupState {
   streakDays: number;
   showCameraPermissionPopup: boolean;
   isFeatureRestricted: boolean;
+  aiRecommendation: string;
+  recommendedBreakType: BreakType;
+  aiLoading: boolean;
 }
 
 const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProps) => {
@@ -39,7 +44,10 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     lastBreakTime: null,
     streakDays: 0,
     showCameraPermissionPopup: false,
-    isFeatureRestricted: false
+    isFeatureRestricted: false,
+    aiRecommendation: 'Analyzing your eye health patterns...',
+    recommendedBreakType: BreakType.MICRO,
+    aiLoading: true
   });
 
   useEffect(() => {
@@ -77,6 +85,21 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
           .filter(b => b.completed)
           .sort((a, b) => b.endTime! - a.endTime!)[0];
         
+        // Generate AI recommendation
+        const aiCoach = new AICoachService();
+        const avgFatigue = recentMetrics.reduce((sum, m) => sum + (m.fatigueIndex || 0), 0) / recentMetrics.length;
+        
+        let recommendedType = BreakType.MICRO;
+        let recommendation = 'Take a quick 20-second eye break using the 20-20-20 rule.';
+        
+        if (avgFatigue > 0.7) {
+          recommendedType = BreakType.LONG;
+          recommendation = 'High eye strain detected! Take a 15-minute wellness break with TCM massage.';
+        } else if (avgFatigue > 0.4) {
+          recommendedType = BreakType.SHORT;
+          recommendation = 'Moderate eye fatigue. A 5-minute guided relaxation break is recommended.';
+        }
+
         setState({
           status: currentStatus,
           eyeScore: {
@@ -90,7 +113,10 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
           lastBreakTime: lastBreak?.endTime || null,
           streakDays,
           showCameraPermissionPopup: false, // Only show when explicitly triggered
-          isFeatureRestricted: userData.settings.metricsOnly
+          isFeatureRestricted: userData.settings.metricsOnly,
+          aiRecommendation: recommendation,
+          recommendedBreakType: recommendedType,
+          aiLoading: false
         });
       }
     } catch (error) {
@@ -263,8 +289,11 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
 
   if (state.isLoading) {
     return (
-      <div className="w-[400px] h-[600px] bg-white p-6 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="w-[380px] h-[550px] bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading EyeZen...</p>
+        </div>
       </div>
     );
   }
@@ -279,198 +308,125 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
            onClose={() => setState(prev => ({ ...prev, showCameraPermissionPopup: false }))}
          />
        )}
-      <div className="w-[400px] bg-white shadow-lg rounded-lg overflow-hidden">
+      <div className="w-[380px] h-[550px] bg-white overflow-hidden flex flex-col">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
+      <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center space-x-3">
             <div className="text-2xl">👁️</div>
-            <h1 className="text-lg font-semibold">EyeZen</h1>
+            <div>
+              <h1 className="text-lg font-bold">EyeZen</h1>
+              <p className="text-blue-100 text-xs opacity-90">Eye Health Monitor</p>
+            </div>
           </div>
           <button
             onClick={onOpenSettings}
-            className="p-1 hover:bg-white/20 rounded transition-colors"
-            title="Settings"
+            className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+            title="Open Dashboard"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
           </button>
         </div>
-        {/* Camera Status Indicator */}
-        <div className="mt-3 flex items-center justify-between text-sm">
-          <div className="flex items-center space-x-2">
-            <div className={`w-2 h-2 rounded-full ${
-              state.cameraEnabled && !state.isFeatureRestricted ? 'bg-green-400' : 'bg-red-400'
-            }`}></div>
-            <span className="text-blue-100">
-              Camera: {state.cameraEnabled && !state.isFeatureRestricted ? 'Active' : 'Inactive'}
-            </span>
-          </div>
-          {state.isFeatureRestricted && (
-            <span className="text-yellow-300 text-xs px-2 py-1 bg-yellow-600 bg-opacity-30 rounded">
-              Limited Mode
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Status Section */}
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center space-x-3">
-            <div className="text-3xl">{getStatusIcon(state.status)}</div>
-            <div>
-              <h2 className={`text-xl font-semibold ${getStatusColor(state.status)}`}>
-                {state.status.charAt(0).toUpperCase() + state.status.slice(1)}
-              </h2>
-              <p className="text-sm text-gray-600">Current Status</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className={`text-2xl font-bold ${getScoreColor(state.eyeScore.current)}`}>
-              {state.eyeScore.current}
-            </div>
-            <div className="flex items-center text-sm text-gray-600">
-              <span>{getTrendIcon(state.eyeScore.trend)}</span>
-              <span className="ml-1">{state.eyeScore.trend}</span>
-            </div>
-          </div>
-        </div>
         
-        {/* Quick Stats */}
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div className="bg-gray-50 p-2 rounded">
-            <div className="text-gray-600">Streak</div>
-            <div className="font-semibold text-blue-600">{state.streakDays} days</div>
-          </div>
-          <div className="bg-gray-50 p-2 rounded">
-            <div className="text-gray-600">Last Break</div>
-            <div className="font-semibold text-gray-800">
-              {formatLastBreakTime(state.lastBreakTime)}
+        {/* Camera Control - Most Important */}
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="text-lg">📹</div>
+              <div>
+                <div className="font-semibold text-sm">Camera Monitoring</div>
+                <div className="text-xs text-blue-100 opacity-90">
+                  {state.cameraEnabled && !state.isFeatureRestricted ? 'Active - Tracking eye health' : 'Inactive - Limited features'}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Break Buttons */}
-      <div className="p-4 space-y-3">
-        <h3 className="text-sm font-medium text-gray-700 mb-2">Take a Break</h3>
-        {state.isFeatureRestricted && (
-          <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-xs text-yellow-700">Camera access rejected. Only alarm features available.</p>
-          </div>
-        )}
-        
-        <button
-          onClick={() => handleBreakClick(BreakType.MICRO)}
-          disabled={state.isFeatureRestricted}
-          className={`w-full py-3 px-4 rounded-lg transition-colors flex items-center justify-between ${
-            state.isFeatureRestricted 
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-              : 'bg-blue-600 hover:bg-blue-700 text-white'
-          }`}
-        >
-          <div className="flex items-center space-x-2">
-            <span className="text-lg">⚡</span>
-            <div className="text-left">
-              <div className="font-medium">Quick Break</div>
-              <div className="text-xs opacity-90">20 seconds</div>
-            </div>
-          </div>
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-
-        <button
-          onClick={() => handleBreakClick(BreakType.SHORT)}
-          disabled={state.isFeatureRestricted}
-          className={`w-full py-3 px-4 rounded-lg transition-colors flex items-center justify-between ${
-            state.isFeatureRestricted 
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-              : 'bg-green-600 hover:bg-green-700 text-white'
-          }`}
-        >
-          <div className="flex items-center space-x-2">
-            <span className="text-lg">🧘</span>
-            <div className="text-left">
-              <div className="font-medium">Eye Break</div>
-              <div className="text-xs opacity-90">5 minutes</div>
-            </div>
-          </div>
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-
-        <button
-          onClick={() => handleBreakClick(BreakType.LONG)}
-          disabled={state.isFeatureRestricted}
-          className={`w-full py-3 px-4 rounded-lg transition-colors flex items-center justify-between ${
-            state.isFeatureRestricted 
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-              : 'bg-purple-600 hover:bg-purple-700 text-white'
-          }`}
-        >
-          <div className="flex items-center space-x-2">
-            <span className="text-lg">🌸</span>
-            <div className="text-left">
-              <div className="font-medium">Wellness Break</div>
-              <div className="text-xs opacity-90">15 minutes</div>
-            </div>
-          </div>
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Quick Settings */}
-      <div className="p-4 border-t border-gray-200 bg-gray-50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <span className={`text-sm ${state.isFeatureRestricted ? 'text-gray-400' : 'text-gray-600'}`}>Camera Monitoring</span>
-            <div className={`w-2 h-2 rounded-full ${
-              state.cameraEnabled ? 'bg-green-500' : 'bg-red-500'
-            }`}></div>
-          </div>
-          <button
-            onClick={toggleCamera}
-            disabled={state.isFeatureRestricted}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              state.isFeatureRestricted 
-                ? 'bg-gray-200 cursor-not-allowed' 
-                : state.cameraEnabled ? 'bg-blue-600' : 'bg-gray-300'
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                state.cameraEnabled ? 'translate-x-6' : 'translate-x-1'
+            <button
+              onClick={toggleCamera}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/50 ${
+                state.cameraEnabled && !state.isFeatureRestricted ? 'bg-green-500 shadow-lg' : 'bg-white/30'
               }`}
-            />
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 shadow-md ${
+                  state.cameraEnabled && !state.isFeatureRestricted ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Simplified Status */}
+      <div className="p-3">
+        <div className="text-center mb-3">
+          <div className="text-3xl mb-1">{getStatusIcon(state.status)}</div>
+          <h2 className={`text-base font-bold ${getScoreColor(state.eyeScore.current)}`}>
+            Eye Health: {state.eyeScore.current}/100
+          </h2>
+          <p className="text-xs text-gray-600">
+            {state.streakDays} day streak • {formatLastBreakTime(state.lastBreakTime)}
+          </p>
+        </div>
+      </div>
+
+      {/* AI Break Suggestion */}
+      <div className="px-4 pb-4 flex-1">
+        {/* AI Coach Recommendation */}
+        <div className="mb-3 p-3 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
+          <button
+            onClick={() => handleBreakClick(BreakType.MICRO)}
+            className="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-400 hover:to-emerald-400 transition-all duration-200 font-medium flex items-center justify-center space-x-2"
+          >
+            <span>⚡</span>
+            <span>Start Recommended Break with AI</span>
           </button>
+        </div>
+        
+        {/* Break Selection */}
+        <div>
+          <h3 className="font-semibold text-gray-700 mb-2">Choose Your Break</h3>
+          
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => handleBreakClick(BreakType.MICRO)}
+              className="p-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors duration-200 text-center border border-blue-200"
+            >
+              <div className="text-xl mb-1">⚡</div>
+              <div className="text-xs font-medium">Quick</div>
+              <div className="text-xs opacity-70">20 sec</div>
+            </button>
+            
+            <button
+              onClick={() => handleBreakClick(BreakType.SHORT)}
+              className="p-3 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg transition-colors duration-200 text-center border border-green-200"
+            >
+              <div className="text-xl mb-1">🧘</div>
+              <div className="text-xs font-medium">Eye Break</div>
+              <div className="text-xs opacity-70">5 min</div>
+            </button>
+            
+            <button
+              onClick={() => handleBreakClick(BreakType.LONG)}
+              className="p-3 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg transition-colors duration-200 text-center border border-purple-200"
+            >
+              <div className="text-xl mb-1">💆</div>
+              <div className="text-xs font-medium">Wellness</div>
+              <div className="text-xs opacity-70">15 min</div>
+            </button>
+          </div>
         </div>
         
         <button
           onClick={onOpenSettings}
-          disabled={state.isFeatureRestricted}
-          className={`w-full mt-3 text-sm font-medium transition-colors ${
-            state.isFeatureRestricted 
-              ? 'text-gray-400 cursor-not-allowed' 
-              : 'text-blue-600 hover:text-blue-700'
-          }`}
+          className="w-full mt-7 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
         >
-          View Dashboard & Settings →
+          View detailed dashboard →
         </button>
-        
-        {state.isFeatureRestricted && (
-          <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-xs text-blue-700">✓ Set Alarm feature is still available</p>
-          </div>
-        )}
       </div>
+
+
     </div>
     </>
   );

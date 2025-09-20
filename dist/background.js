@@ -1,1 +1,649 @@
-(()=>{"use strict";var e,t={520:(e,t,a)=>{a.r(t),a.d(t,{default:()=>m});var r=a(123),i=a(235);const s="break-reminder",n="daily-summary",o="posture-check",c=20,l=30,d=1440,h=new class{constructor(){this.isInitialized=!1,this.activeBreakTabId=null}async initialize(){if(!this.isInitialized)try{chrome.alarms.onAlarm.addListener(this.handleAlarm.bind(this)),chrome.runtime.onMessage.addListener(this.handleMessage.bind(this)),chrome.runtime.onInstalled.addListener(this.handleInstall.bind(this)),chrome.runtime.onStartup.addListener(this.handleStartup.bind(this)),chrome.tabs.onRemoved.addListener(this.handleTabRemoved.bind(this)),await this.setupDefaultAlarms(),this.isInitialized=!0,console.log("EyeZen Background Service initialized")}catch(e){console.error("Failed to initialize background service:",e)}}async handleAlarm(e){console.log("Alarm triggered:",e.name);try{switch(e.name){case s:await this.handleBreakReminder();break;case o:await this.handlePostureCheck();break;case n:await this.handleDailySummary();break;case"weekly-summary":await this.handleWeeklySummary();break;default:console.log("Unknown alarm:",e.name)}}catch(t){console.error("Error handling alarm:",e.name,t)}}async handleMessage(e,t,a){try{switch(e.action){case"START_BREAK":await this.startBreak(e.breakType),a({success:!0});break;case"END_BREAK":await this.endBreak(e.breakId),a({success:!0});break;case"UPDATE_SETTINGS":await this.updateSettings(e.settings),a({success:!0});break;case"GET_STATUS":a({success:!0,data:await this.getStatus()});break;case"SNOOZE_REMINDER":await this.snoozeReminder(e.minutes||5),a({success:!0});break;default:a({success:!1,error:"Unknown action"})}}catch(e){console.error("Error handling message:",e),a({success:!1,error:String(e)})}return!0}async handleInstall(e){"install"===e.reason?(console.log("EyeZen installed for the first time"),await this.setupInitialData(),await this.showNotification({type:"basic",iconUrl:"assets/icons/icon-48.svg",title:"Welcome to EyeZen! 👁️",message:"Your AI eye health companion is ready. Click to get started!"})):"update"===e.reason&&console.log("EyeZen updated to version:",chrome.runtime.getManifest().version)}async handleStartup(){console.log("EyeZen service worker started"),await this.setupDefaultAlarms()}async handleTabRemoved(e){this.activeBreakTabId===e&&(this.activeBreakTabId=null,console.log("Break tab closed"))}async setupDefaultAlarms(){try{const e=await r.ChromeStorageService.getUserData(),t=e?.settings||i.DEFAULT_SETTINGS;if(await chrome.alarms.clearAll(),t.reminderEnabled??1){const e=t.reminderInterval??c;await chrome.alarms.create(s,{delayInMinutes:e,periodInMinutes:e})}(t.reminderEnabled??1)&&await chrome.alarms.create(o,{delayInMinutes:l,periodInMinutes:l});const a=new Date,h=new Date;h.setHours(20,0,0,0),h<=a&&h.setDate(h.getDate()+1),await chrome.alarms.create(n,{when:h.getTime(),periodInMinutes:d}),console.log("Default alarms set up successfully")}catch(e){console.error("Failed to setup default alarms:",e)}}async handleBreakReminder(){try{const e=await r.ChromeStorageService.getUserData();if(!e||!e.settings.reminderEnabled)return;if(e.breaks.find(e=>!e.completed))return void console.log("User is already in a break, skipping reminder");const t=e.metrics.slice(-5),a=t.reduce((e,t)=>e+(t.fatigueIndex||0),0)/t.length;let i="👁️ Time for an Eye Break!",s="Follow the 20-20-20 rule: Look at something 20 feet away for 20 seconds.",n=0;a>.7?(i="⚠️ High Eye Strain Detected!",s="Your eyes need immediate rest. Take a break now to prevent fatigue.",n=2):a>.5&&(i="😴 Eyes Getting Tired",s="Time for a refreshing eye break. Your future self will thank you!",n=1),await this.showNotification({type:"basic",iconUrl:"assets/icons/icon-48.svg",title:i,message:s,priority:n,buttons:[{title:"Start Break"},{title:"Snooze 5min"}]})}catch(e){console.error("Error in break reminder:",e)}}async handlePostureCheck(){try{const e=await r.ChromeStorageService.getUserData();if(!e||!e.settings.reminderEnabled)return;await this.showNotification({type:"basic",iconUrl:"assets/icons/icon-48.svg",title:"🧘 Posture Check",message:"Sit up straight, relax your shoulders, and adjust your screen height.",priority:0})}catch(e){console.error("Error in posture check:",e)}}async handleDailySummary(){try{const e=await r.ChromeStorageService.getUserData();if(!e)return;const t=new Date;t.setHours(0,0,0,0);const a=e.metrics.filter(e=>{const a=new Date(e.timestamp);return a.setHours(0,0,0,0),a.getTime()===t.getTime()}),i=e.breaks.filter(e=>{const a=new Date(e.startTime);return a.setHours(0,0,0,0),a.getTime()===t.getTime()&&e.completed}),s=a.length>0?a.reduce((e,t)=>e+(100-100*(t.fatigueIndex||0)),0)/a.length:50;await this.showNotification({type:"basic",iconUrl:"assets/icons/icon-48.svg",title:"📊 Daily Eye Health Summary",message:`Eye Health Score: ${Math.round(s)}/100 | Breaks Taken: ${i.length}`,priority:0})}catch(e){console.error("Error in daily summary:",e)}}async handleWeeklySummary(){try{await this.showNotification({type:"basic",iconUrl:"assets/icons/icon-48.svg",title:"📈 Weekly Eye Health Report",message:"Your weekly eye health report is ready! Click to view insights.",priority:1})}catch(e){console.error("Error in weekly summary:",e)}}async startBreak(e){try{const t=Date.now().toString(),a={id:t,type:e,duration:e===i.BreakType.MICRO?20:e===i.BreakType.SHORT?300:900,startTime:Date.now(),completed:!1,activities:[]},s=await r.ChromeStorageService.getUserData();s&&(s.breaks.push(a),await r.ChromeStorageService.saveUserData(s));const n=chrome.runtime.getURL(`break-ritual.html?type=${e}&id=${t}`),o=await chrome.tabs.create({url:n});this.activeBreakTabId=o.id||null,console.log("Break started:",e,t)}catch(e){throw console.error("Error starting break:",e),e}}async endBreak(e){try{const t=await r.ChromeStorageService.getUserData();if(t){const a=t.breaks.findIndex(t=>t.id===e);-1!==a&&(t.breaks[a].completed=!0,t.breaks[a].endTime=Date.now(),await r.ChromeStorageService.saveUserData(t))}console.log("Break completed:",e)}catch(e){throw console.error("Error ending break:",e),e}}async updateSettings(e){try{await r.ChromeStorageService.updateSettings(e),await this.setupDefaultAlarms(),console.log("Settings updated:",e)}catch(e){throw console.error("Error updating settings:",e),e}}async getStatus(){try{const e=await r.ChromeStorageService.getUserData();return{isActive:!0,settings:e?.settings||{},lastBreak:e?.breaks.slice(-1)[0]||null,todayMetrics:e?.metrics.filter(e=>{const t=new Date;t.setHours(0,0,0,0);const a=new Date(e.timestamp);return a.setHours(0,0,0,0),a.getTime()===t.getTime()})||[]}}catch(e){throw console.error("Error getting status:",e),e}}async snoozeReminder(e){try{await chrome.alarms.clear(s),await chrome.alarms.create(s,{delayInMinutes:e}),console.log(`Break reminder snoozed for ${e} minutes`)}catch(e){throw console.error("Error snoozing reminder:",e),e}}async setupInitialData(){try{const e={settings:{cameraEnabled:!0,detectionSensitivity:"medium",fatigueThreshold:70,reminderEnabled:!0,reminderInterval:20,breakDuration:20,dataRetention:30,metricsOnly:!1,language:"en",theme:"light",notifications:!0,sounds:!0,dailyBreakGoal:8,eyeScoreGoal:80},metrics:[],breaks:[],events:[],score:{current:50,daily:50,weekly:50,trend:"stable"},lastUpdated:Date.now()};await r.ChromeStorageService.saveUserData(e),console.log("Initial data setup completed")}catch(e){console.error("Error setting up initial data:",e)}}async showNotification(e){try{const t=`eyezen-${Date.now()}`,a={type:"basic",iconUrl:"assets/icons/icon-48.svg",title:"EyeZen",message:"",priority:0,...e},r={type:"basic",iconUrl:a.iconUrl||"assets/icons/icon-48.svg",title:a.title||"EyeZen",message:a.message||""};a.buttons&&(r.buttons=a.buttons),await chrome.notifications.create(t,r),0===(e.priority||0)&&setTimeout(()=>{chrome.notifications.clear(t)},1e4)}catch(e){console.error("Error showing notification:",e)}}};h.initialize(),chrome.notifications.onClicked.addListener(e=>{e.startsWith("eyezen-")&&(chrome.action.openPopup(),chrome.notifications.clear(e))}),chrome.notifications.onButtonClicked.addListener((e,t)=>{e.startsWith("eyezen-")&&(0===t?h.initialize().then(()=>{chrome.runtime.sendMessage({action:"START_BREAK",breakType:i.BreakType.SHORT})}):1===t&&h.initialize().then(()=>{chrome.runtime.sendMessage({action:"SNOOZE_REMINDER",minutes:5})}),chrome.notifications.clear(e))});const m=h}},a={};function r(e){var i=a[e];if(void 0!==i)return i.exports;var s=a[e]={exports:{}};return t[e](s,s.exports,r),s.exports}r.m=t,e=[],r.O=(t,a,i,s)=>{if(!a){var n=1/0;for(d=0;d<e.length;d++){for(var[a,i,s]=e[d],o=!0,c=0;c<a.length;c++)(!1&s||n>=s)&&Object.keys(r.O).every(e=>r.O[e](a[c]))?a.splice(c--,1):(o=!1,s<n&&(n=s));if(o){e.splice(d--,1);var l=i();void 0!==l&&(t=l)}}return t}s=s||0;for(var d=e.length;d>0&&e[d-1][2]>s;d--)e[d]=e[d-1];e[d]=[a,i,s]},r.d=(e,t)=>{for(var a in t)r.o(t,a)&&!r.o(e,a)&&Object.defineProperty(e,a,{enumerable:!0,get:t[a]})},r.o=(e,t)=>Object.prototype.hasOwnProperty.call(e,t),r.r=e=>{"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(e,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(e,"__esModule",{value:!0})},(()=>{var e={471:0};r.O.j=t=>0===e[t];var t=(t,a)=>{var i,s,[n,o,c]=a,l=0;if(n.some(t=>0!==e[t])){for(i in o)r.o(o,i)&&(r.m[i]=o[i]);if(c)var d=c(r)}for(t&&t(a);l<n.length;l++)s=n[l],r.o(e,s)&&e[s]&&e[s][0](),e[s]=0;return r.O(d)},a=self.webpackChunkeyezen_chrome_extension=self.webpackChunkeyezen_chrome_extension||[];a.forEach(t.bind(null,0)),a.push=t.bind(null,a.push.bind(a))})();var i=r.O(void 0,[123],()=>r(520));i=r.O(i)})();
+/******/ (() => { // webpackBootstrap
+/******/ 	"use strict";
+/******/ 	var __webpack_modules__ = ({
+
+/***/ "./background/service-worker.ts":
+/*!**************************************!*\
+  !*** ./background/service-worker.ts ***!
+  \**************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _core_storage_index__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../core/storage/index */ "./core/storage/index.ts");
+/* harmony import */ var _types_index__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../types/index */ "./types/index.ts");
+/**
+ * Background Service Worker
+ * Handles alarms, notifications, and background tasks for EyeZen
+ */
+
+
+// Constants
+const ALARM_NAMES = {
+    BREAK_REMINDER: 'break-reminder',
+    DAILY_SUMMARY: 'daily-summary',
+    WEEKLY_SUMMARY: 'weekly-summary',
+    POSTURE_CHECK: 'posture-check'
+};
+const DEFAULT_INTERVALS = {
+    BREAK_REMINDER: 20, // 20 minutes for 20-20-20 rule
+    POSTURE_CHECK: 30, // 30 minutes for posture reminders
+    DAILY_SUMMARY: 24 * 60, // Daily at end of day
+    WEEKLY_SUMMARY: 7 * 24 * 60 // Weekly summary
+};
+class BackgroundService {
+    constructor() {
+        this.isInitialized = false;
+        this.activeBreakTabId = null;
+    }
+    async initialize() {
+        if (this.isInitialized)
+            return;
+        try {
+            // Set up alarm listeners
+            chrome.alarms.onAlarm.addListener(this.handleAlarm.bind(this));
+            // Set up message listeners
+            chrome.runtime.onMessage.addListener(this.handleMessage.bind(this));
+            // Set up installation/startup listeners
+            chrome.runtime.onInstalled.addListener(this.handleInstall.bind(this));
+            chrome.runtime.onStartup.addListener(this.handleStartup.bind(this));
+            // Set up tab listeners for break management
+            chrome.tabs.onRemoved.addListener(this.handleTabRemoved.bind(this));
+            // Initialize default alarms
+            await this.setupDefaultAlarms();
+            this.isInitialized = true;
+            console.log('EyeZen Background Service initialized');
+        }
+        catch (error) {
+            console.error('Failed to initialize background service:', error);
+        }
+    }
+    async handleAlarm(alarm) {
+        console.log('Alarm triggered:', alarm.name);
+        try {
+            switch (alarm.name) {
+                case ALARM_NAMES.BREAK_REMINDER:
+                    await this.handleBreakReminder();
+                    break;
+                case ALARM_NAMES.POSTURE_CHECK:
+                    await this.handlePostureCheck();
+                    break;
+                case ALARM_NAMES.DAILY_SUMMARY:
+                    await this.handleDailySummary();
+                    break;
+                case ALARM_NAMES.WEEKLY_SUMMARY:
+                    await this.handleWeeklySummary();
+                    break;
+                default:
+                    console.log('Unknown alarm:', alarm.name);
+            }
+        }
+        catch (error) {
+            console.error('Error handling alarm:', alarm.name, error);
+        }
+    }
+    async handleMessage(message, sender, sendResponse) {
+        try {
+            switch (message.action) {
+                case 'START_BREAK':
+                    await this.startBreak(message.breakType);
+                    sendResponse({ success: true });
+                    break;
+                case 'END_BREAK':
+                    await this.endBreak(message.breakId);
+                    sendResponse({ success: true });
+                    break;
+                case 'UPDATE_SETTINGS':
+                    await this.updateSettings(message.settings);
+                    sendResponse({ success: true });
+                    break;
+                case 'GET_STATUS':
+                    const status = await this.getStatus();
+                    sendResponse({ success: true, data: status });
+                    break;
+                case 'SNOOZE_REMINDER':
+                    await this.snoozeReminder(message.minutes || 5);
+                    sendResponse({ success: true });
+                    break;
+                default:
+                    sendResponse({ success: false, error: 'Unknown action' });
+            }
+        }
+        catch (error) {
+            console.error('Error handling message:', error);
+            sendResponse({ success: false, error: String(error) });
+        }
+        return true; // Keep message channel open for async response
+    }
+    async handleInstall(details) {
+        if (details.reason === 'install') {
+            console.log('EyeZen installed for the first time');
+            await this.setupInitialData();
+            // Show welcome notification
+            await this.showNotification({
+                type: 'basic',
+                iconUrl: 'assets/icons/icon-48.svg',
+                title: 'Welcome to EyeZen! 👁️',
+                message: 'Your AI eye health companion is ready. Click to get started!'
+            });
+        }
+        else if (details.reason === 'update') {
+            console.log('EyeZen updated to version:', chrome.runtime.getManifest().version);
+        }
+    }
+    async handleStartup() {
+        console.log('EyeZen service worker started');
+        await this.setupDefaultAlarms();
+    }
+    async handleTabRemoved(tabId) {
+        if (this.activeBreakTabId === tabId) {
+            this.activeBreakTabId = null;
+            console.log('Break tab closed');
+        }
+    }
+    async setupDefaultAlarms() {
+        try {
+            const userData = await _core_storage_index__WEBPACK_IMPORTED_MODULE_0__.ChromeStorageService.getUserData();
+            const settings = userData?.settings || _types_index__WEBPACK_IMPORTED_MODULE_1__.DEFAULT_SETTINGS;
+            // Clear existing alarms
+            await chrome.alarms.clearAll();
+            // Set up break reminder alarm
+            if (settings.reminderEnabled ?? true) {
+                const interval = settings.reminderInterval ?? DEFAULT_INTERVALS.BREAK_REMINDER;
+                await chrome.alarms.create(ALARM_NAMES.BREAK_REMINDER, {
+                    delayInMinutes: interval,
+                    periodInMinutes: interval
+                });
+            }
+            // Set up posture check alarm
+            if (settings.reminderEnabled ?? true) {
+                await chrome.alarms.create(ALARM_NAMES.POSTURE_CHECK, {
+                    delayInMinutes: DEFAULT_INTERVALS.POSTURE_CHECK,
+                    periodInMinutes: DEFAULT_INTERVALS.POSTURE_CHECK
+                });
+            }
+            // Set up daily summary alarm (8 PM)
+            const now = new Date();
+            const dailySummaryTime = new Date();
+            dailySummaryTime.setHours(20, 0, 0, 0); // 8 PM
+            if (dailySummaryTime <= now) {
+                dailySummaryTime.setDate(dailySummaryTime.getDate() + 1);
+            }
+            await chrome.alarms.create(ALARM_NAMES.DAILY_SUMMARY, {
+                when: dailySummaryTime.getTime(),
+                periodInMinutes: DEFAULT_INTERVALS.DAILY_SUMMARY
+            });
+            console.log('Default alarms set up successfully');
+        }
+        catch (error) {
+            console.error('Failed to setup default alarms:', error);
+        }
+    }
+    async handleBreakReminder() {
+        try {
+            const userData = await _core_storage_index__WEBPACK_IMPORTED_MODULE_0__.ChromeStorageService.getUserData();
+            if (!userData || !userData.settings.reminderEnabled) {
+                return;
+            }
+            // Check if user is currently in a break
+            const activeBreak = userData.breaks.find(b => !b.completed);
+            if (activeBreak) {
+                console.log('User is already in a break, skipping reminder');
+                return;
+            }
+            // Check recent activity to determine reminder urgency
+            const recentMetrics = userData.metrics.slice(-5);
+            const avgEyeStrain = recentMetrics.reduce((sum, m) => sum + (m.fatigueIndex || 0), 0) / recentMetrics.length;
+            let title = '👁️ Time for an Eye Break!';
+            let message = 'Follow the 20-20-20 rule: Look at something 20 feet away for 20 seconds.';
+            let priority = 0;
+            if (avgEyeStrain > 0.7) {
+                title = '⚠️ High Eye Strain Detected!';
+                message = 'Your eyes need immediate rest. Take a break now to prevent fatigue.';
+                priority = 2;
+            }
+            else if (avgEyeStrain > 0.5) {
+                title = '😴 Eyes Getting Tired';
+                message = 'Time for a refreshing eye break. Your future self will thank you!';
+                priority = 1;
+            }
+            await this.showNotification({
+                type: 'basic',
+                iconUrl: 'assets/icons/icon-48.svg',
+                title,
+                message,
+                priority,
+                buttons: [
+                    { title: 'Start Break' },
+                    { title: 'Snooze 5min' }
+                ]
+            });
+        }
+        catch (error) {
+            console.error('Error in break reminder:', error);
+        }
+    }
+    async handlePostureCheck() {
+        try {
+            const userData = await _core_storage_index__WEBPACK_IMPORTED_MODULE_0__.ChromeStorageService.getUserData();
+            if (!userData || !userData.settings.reminderEnabled) {
+                return;
+            }
+            await this.showNotification({
+                type: 'basic',
+                iconUrl: 'assets/icons/icon-48.svg',
+                title: '🧘 Posture Check',
+                message: 'Sit up straight, relax your shoulders, and adjust your screen height.',
+                priority: 0
+            });
+        }
+        catch (error) {
+            console.error('Error in posture check:', error);
+        }
+    }
+    async handleDailySummary() {
+        try {
+            // Generate and show daily summary
+            const userData = await _core_storage_index__WEBPACK_IMPORTED_MODULE_0__.ChromeStorageService.getUserData();
+            if (!userData)
+                return;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayMetrics = userData.metrics.filter(m => {
+                const metricDate = new Date(m.timestamp);
+                metricDate.setHours(0, 0, 0, 0);
+                return metricDate.getTime() === today.getTime();
+            });
+            const todayBreaks = userData.breaks.filter(b => {
+                const breakDate = new Date(b.startTime);
+                breakDate.setHours(0, 0, 0, 0);
+                return breakDate.getTime() === today.getTime() && b.completed;
+            });
+            const avgEyeHealth = todayMetrics.length > 0
+                ? todayMetrics.reduce((sum, m) => sum + (100 - (m.fatigueIndex || 0) * 100), 0) / todayMetrics.length
+                : 50;
+            await this.showNotification({
+                type: 'basic',
+                iconUrl: 'assets/icons/icon-48.svg',
+                title: '📊 Daily Eye Health Summary',
+                message: `Eye Health Score: ${Math.round(avgEyeHealth)}/100 | Breaks Taken: ${todayBreaks.length}`,
+                priority: 0
+            });
+        }
+        catch (error) {
+            console.error('Error in daily summary:', error);
+        }
+    }
+    async handleWeeklySummary() {
+        try {
+            // Generate weekly summary - placeholder for now
+            await this.showNotification({
+                type: 'basic',
+                iconUrl: 'assets/icons/icon-48.svg',
+                title: '📈 Weekly Eye Health Report',
+                message: 'Your weekly eye health report is ready! Click to view insights.',
+                priority: 1
+            });
+        }
+        catch (error) {
+            console.error('Error in weekly summary:', error);
+        }
+    }
+    async startBreak(breakType) {
+        try {
+            // Create break record
+            const breakId = Date.now().toString();
+            const breakData = {
+                id: breakId,
+                type: breakType,
+                duration: breakType === _types_index__WEBPACK_IMPORTED_MODULE_1__.BreakType.MICRO ? 20 : breakType === _types_index__WEBPACK_IMPORTED_MODULE_1__.BreakType.SHORT ? 300 : 900,
+                startTime: Date.now(),
+                completed: false,
+                activities: []
+            };
+            // Save break to storage
+            const userData = await _core_storage_index__WEBPACK_IMPORTED_MODULE_0__.ChromeStorageService.getUserData();
+            if (userData) {
+                userData.breaks.push(breakData);
+                await _core_storage_index__WEBPACK_IMPORTED_MODULE_0__.ChromeStorageService.saveUserData(userData);
+            }
+            // Open break ritual page
+            const breakUrl = chrome.runtime.getURL(`break-ritual.html?type=${breakType}&id=${breakId}`);
+            const tab = await chrome.tabs.create({ url: breakUrl });
+            this.activeBreakTabId = tab.id || null;
+            console.log('Break started:', breakType, breakId);
+        }
+        catch (error) {
+            console.error('Error starting break:', error);
+            throw error;
+        }
+    }
+    async endBreak(breakId) {
+        try {
+            const userData = await _core_storage_index__WEBPACK_IMPORTED_MODULE_0__.ChromeStorageService.getUserData();
+            if (userData) {
+                const breakIndex = userData.breaks.findIndex(b => b.id === breakId);
+                if (breakIndex !== -1) {
+                    userData.breaks[breakIndex].completed = true;
+                    userData.breaks[breakIndex].endTime = Date.now();
+                    await _core_storage_index__WEBPACK_IMPORTED_MODULE_0__.ChromeStorageService.saveUserData(userData);
+                }
+            }
+            console.log('Break completed:', breakId);
+        }
+        catch (error) {
+            console.error('Error ending break:', error);
+            throw error;
+        }
+    }
+    async updateSettings(settings) {
+        try {
+            await _core_storage_index__WEBPACK_IMPORTED_MODULE_0__.ChromeStorageService.updateSettings(settings);
+            // Recreate alarms with new settings
+            await this.setupDefaultAlarms();
+            console.log('Settings updated:', settings);
+        }
+        catch (error) {
+            console.error('Error updating settings:', error);
+            throw error;
+        }
+    }
+    async getStatus() {
+        try {
+            const userData = await _core_storage_index__WEBPACK_IMPORTED_MODULE_0__.ChromeStorageService.getUserData();
+            return {
+                isActive: true,
+                settings: userData?.settings || {},
+                lastBreak: userData?.breaks.slice(-1)[0] || null,
+                todayMetrics: userData?.metrics.filter(m => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const metricDate = new Date(m.timestamp);
+                    metricDate.setHours(0, 0, 0, 0);
+                    return metricDate.getTime() === today.getTime();
+                }) || []
+            };
+        }
+        catch (error) {
+            console.error('Error getting status:', error);
+            throw error;
+        }
+    }
+    async snoozeReminder(minutes) {
+        try {
+            // Clear current break reminder
+            await chrome.alarms.clear(ALARM_NAMES.BREAK_REMINDER);
+            // Set new alarm for snooze duration
+            await chrome.alarms.create(ALARM_NAMES.BREAK_REMINDER, {
+                delayInMinutes: minutes
+            });
+            console.log(`Break reminder snoozed for ${minutes} minutes`);
+        }
+        catch (error) {
+            console.error('Error snoozing reminder:', error);
+            throw error;
+        }
+    }
+    async setupInitialData() {
+        try {
+            const initialData = {
+                settings: {
+                    cameraEnabled: true,
+                    detectionSensitivity: 'medium',
+                    fatigueThreshold: 70,
+                    reminderEnabled: true,
+                    reminderInterval: 20,
+                    breakDuration: 20,
+                    dataRetention: 30,
+                    metricsOnly: false,
+                    language: 'en',
+                    theme: 'light',
+                    notifications: true,
+                    sounds: true,
+                    dailyBreakGoal: 8,
+                    eyeScoreGoal: 80
+                },
+                metrics: [],
+                breaks: [],
+                events: [],
+                score: {
+                    current: 50,
+                    daily: 50,
+                    weekly: 50,
+                    trend: 'stable'
+                },
+                lastUpdated: Date.now()
+            };
+            await _core_storage_index__WEBPACK_IMPORTED_MODULE_0__.ChromeStorageService.saveUserData(initialData);
+            console.log('Initial data setup completed');
+        }
+        catch (error) {
+            console.error('Error setting up initial data:', error);
+        }
+    }
+    async showNotification(options) {
+        try {
+            const notificationId = `eyezen-${Date.now()}`;
+            // Set default options
+            const notificationOptions = {
+                type: 'basic',
+                iconUrl: 'assets/icons/icon-48.svg',
+                title: 'EyeZen',
+                message: '',
+                priority: 0,
+                ...options
+            };
+            // Create notification with required properties only
+            const createOptions = {
+                type: 'basic',
+                iconUrl: notificationOptions.iconUrl || 'assets/icons/icon-48.svg',
+                title: notificationOptions.title || 'EyeZen',
+                message: notificationOptions.message || ''
+            };
+            // Add optional properties if they exist
+            if (notificationOptions.buttons) {
+                createOptions.buttons = notificationOptions.buttons;
+            }
+            await chrome.notifications.create(notificationId, createOptions);
+            // Auto-clear notification after 10 seconds for low priority
+            if ((options.priority || 0) === 0) {
+                setTimeout(() => {
+                    chrome.notifications.clear(notificationId);
+                }, 10000);
+            }
+        }
+        catch (error) {
+            console.error('Error showing notification:', error);
+        }
+    }
+}
+// Initialize the background service
+const backgroundService = new BackgroundService();
+backgroundService.initialize();
+// Handle notification clicks
+chrome.notifications.onClicked.addListener((notificationId) => {
+    if (notificationId.startsWith('eyezen-')) {
+        // Open popup or options page
+        chrome.action.openPopup();
+        chrome.notifications.clear(notificationId);
+    }
+});
+// Handle notification button clicks
+chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
+    if (notificationId.startsWith('eyezen-')) {
+        if (buttonIndex === 0) {
+            // Start Break button
+            backgroundService.initialize().then(() => {
+                chrome.runtime.sendMessage({ action: 'START_BREAK', breakType: _types_index__WEBPACK_IMPORTED_MODULE_1__.BreakType.SHORT });
+            });
+        }
+        else if (buttonIndex === 1) {
+            // Snooze button
+            backgroundService.initialize().then(() => {
+                chrome.runtime.sendMessage({ action: 'SNOOZE_REMINDER', minutes: 5 });
+            });
+        }
+        chrome.notifications.clear(notificationId);
+    }
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (backgroundService);
+
+
+/***/ })
+
+/******/ 	});
+/************************************************************************/
+/******/ 	// The module cache
+/******/ 	var __webpack_module_cache__ = {};
+/******/ 	
+/******/ 	// The require function
+/******/ 	function __webpack_require__(moduleId) {
+/******/ 		// Check if module is in cache
+/******/ 		var cachedModule = __webpack_module_cache__[moduleId];
+/******/ 		if (cachedModule !== undefined) {
+/******/ 			return cachedModule.exports;
+/******/ 		}
+/******/ 		// Create a new module (and put it into the cache)
+/******/ 		var module = __webpack_module_cache__[moduleId] = {
+/******/ 			// no module.id needed
+/******/ 			// no module.loaded needed
+/******/ 			exports: {}
+/******/ 		};
+/******/ 	
+/******/ 		// Execute the module function
+/******/ 		__webpack_modules__[moduleId](module, module.exports, __webpack_require__);
+/******/ 	
+/******/ 		// Return the exports of the module
+/******/ 		return module.exports;
+/******/ 	}
+/******/ 	
+/******/ 	// expose the modules object (__webpack_modules__)
+/******/ 	__webpack_require__.m = __webpack_modules__;
+/******/ 	
+/************************************************************************/
+/******/ 	/* webpack/runtime/chunk loaded */
+/******/ 	(() => {
+/******/ 		var deferred = [];
+/******/ 		__webpack_require__.O = (result, chunkIds, fn, priority) => {
+/******/ 			if(chunkIds) {
+/******/ 				priority = priority || 0;
+/******/ 				for(var i = deferred.length; i > 0 && deferred[i - 1][2] > priority; i--) deferred[i] = deferred[i - 1];
+/******/ 				deferred[i] = [chunkIds, fn, priority];
+/******/ 				return;
+/******/ 			}
+/******/ 			var notFulfilled = Infinity;
+/******/ 			for (var i = 0; i < deferred.length; i++) {
+/******/ 				var [chunkIds, fn, priority] = deferred[i];
+/******/ 				var fulfilled = true;
+/******/ 				for (var j = 0; j < chunkIds.length; j++) {
+/******/ 					if ((priority & 1 === 0 || notFulfilled >= priority) && Object.keys(__webpack_require__.O).every((key) => (__webpack_require__.O[key](chunkIds[j])))) {
+/******/ 						chunkIds.splice(j--, 1);
+/******/ 					} else {
+/******/ 						fulfilled = false;
+/******/ 						if(priority < notFulfilled) notFulfilled = priority;
+/******/ 					}
+/******/ 				}
+/******/ 				if(fulfilled) {
+/******/ 					deferred.splice(i--, 1)
+/******/ 					var r = fn();
+/******/ 					if (r !== undefined) result = r;
+/******/ 				}
+/******/ 			}
+/******/ 			return result;
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/define property getters */
+/******/ 	(() => {
+/******/ 		// define getter functions for harmony exports
+/******/ 		__webpack_require__.d = (exports, definition) => {
+/******/ 			for(var key in definition) {
+/******/ 				if(__webpack_require__.o(definition, key) && !__webpack_require__.o(exports, key)) {
+/******/ 					Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
+/******/ 				}
+/******/ 			}
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/hasOwnProperty shorthand */
+/******/ 	(() => {
+/******/ 		__webpack_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/make namespace object */
+/******/ 	(() => {
+/******/ 		// define __esModule on exports
+/******/ 		__webpack_require__.r = (exports) => {
+/******/ 			if(typeof Symbol !== 'undefined' && Symbol.toStringTag) {
+/******/ 				Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
+/******/ 			}
+/******/ 			Object.defineProperty(exports, '__esModule', { value: true });
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/jsonp chunk loading */
+/******/ 	(() => {
+/******/ 		// no baseURI
+/******/ 		
+/******/ 		// object to store loaded and loading chunks
+/******/ 		// undefined = chunk not loaded, null = chunk preloaded/prefetched
+/******/ 		// [resolve, reject, Promise] = chunk loading, 0 = chunk loaded
+/******/ 		var installedChunks = {
+/******/ 			"background": 0
+/******/ 		};
+/******/ 		
+/******/ 		// no chunk on demand loading
+/******/ 		
+/******/ 		// no prefetching
+/******/ 		
+/******/ 		// no preloaded
+/******/ 		
+/******/ 		// no HMR
+/******/ 		
+/******/ 		// no HMR manifest
+/******/ 		
+/******/ 		__webpack_require__.O.j = (chunkId) => (installedChunks[chunkId] === 0);
+/******/ 		
+/******/ 		// install a JSONP callback for chunk loading
+/******/ 		var webpackJsonpCallback = (parentChunkLoadingFunction, data) => {
+/******/ 			var [chunkIds, moreModules, runtime] = data;
+/******/ 			// add "moreModules" to the modules object,
+/******/ 			// then flag all "chunkIds" as loaded and fire callback
+/******/ 			var moduleId, chunkId, i = 0;
+/******/ 			if(chunkIds.some((id) => (installedChunks[id] !== 0))) {
+/******/ 				for(moduleId in moreModules) {
+/******/ 					if(__webpack_require__.o(moreModules, moduleId)) {
+/******/ 						__webpack_require__.m[moduleId] = moreModules[moduleId];
+/******/ 					}
+/******/ 				}
+/******/ 				if(runtime) var result = runtime(__webpack_require__);
+/******/ 			}
+/******/ 			if(parentChunkLoadingFunction) parentChunkLoadingFunction(data);
+/******/ 			for(;i < chunkIds.length; i++) {
+/******/ 				chunkId = chunkIds[i];
+/******/ 				if(__webpack_require__.o(installedChunks, chunkId) && installedChunks[chunkId]) {
+/******/ 					installedChunks[chunkId][0]();
+/******/ 				}
+/******/ 				installedChunks[chunkId] = 0;
+/******/ 			}
+/******/ 			return __webpack_require__.O(result);
+/******/ 		}
+/******/ 		
+/******/ 		var chunkLoadingGlobal = self["webpackChunkeyezen_chrome_extension"] = self["webpackChunkeyezen_chrome_extension"] || [];
+/******/ 		chunkLoadingGlobal.forEach(webpackJsonpCallback.bind(null, 0));
+/******/ 		chunkLoadingGlobal.push = webpackJsonpCallback.bind(null, chunkLoadingGlobal.push.bind(chunkLoadingGlobal));
+/******/ 	})();
+/******/ 	
+/************************************************************************/
+/******/ 	
+/******/ 	// startup
+/******/ 	// Load entry module and return exports
+/******/ 	// This entry module depends on other loaded chunks and execution need to be delayed
+/******/ 	var __webpack_exports__ = __webpack_require__.O(undefined, ["core_storage_index_ts"], () => (__webpack_require__("./background/service-worker.ts")))
+/******/ 	__webpack_exports__ = __webpack_require__.O(__webpack_exports__);
+/******/ 	
+/******/ })()
+;
+//# sourceMappingURL=background.js.map

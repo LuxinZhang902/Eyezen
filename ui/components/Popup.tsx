@@ -10,6 +10,7 @@ import { ChromeAIService } from '../../core/api/openai-service';
 import { AICoachService } from '../../core/coach/index';
 import { EyeHealthScorer } from '../../core/metrics/index';
 import CameraPermissionPopup from './CameraPermissionPopup';
+import LoginModal from './LoginModal';
 
 interface PopupProps {
   onStartBreak: (breakType: BreakType) => void;
@@ -28,6 +29,9 @@ interface PopupState {
   aiRecommendation: string;
   recommendedBreakType: BreakType;
   aiLoading: boolean;
+  showLoginModal: boolean;
+  isLoggedIn: boolean;
+  userEmail: string;
 }
 
 const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProps) => {
@@ -47,17 +51,40 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     isFeatureRestricted: false,
     aiRecommendation: 'Analyzing your eye health patterns...',
     recommendedBreakType: BreakType.MICRO,
-    aiLoading: true
+    aiLoading: true,
+    showLoginModal: false,
+    isLoggedIn: false,
+    userEmail: ''
   });
 
   useEffect(() => {
     loadUserData();
+    loadLoginState();
     
     // Set up periodic updates
     const interval = setInterval(loadUserData, 30000); // Update every 30 seconds
     
     return () => clearInterval(interval);
   }, []);
+
+  const loadLoginState = async () => {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        const result = await chrome.storage.local.get(['eyezen_login_state']);
+        const loginState = result.eyezen_login_state;
+        
+        if (loginState && loginState.isLoggedIn) {
+          setState(prev => ({
+            ...prev,
+            isLoggedIn: true,
+            userEmail: loginState.userEmail
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load login state:', error);
+    }
+  };
 
   const loadUserData = async () => {
     try {
@@ -100,7 +127,8 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
           recommendation = 'Moderate eye fatigue. A 5-minute guided relaxation break is recommended.';
         }
 
-        setState({
+        setState(prev => ({
+          ...prev,
           status: currentStatus,
           eyeScore: {
             current: healthScore.overall,
@@ -116,8 +144,10 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
           isFeatureRestricted: userData.settings.metricsOnly,
           aiRecommendation: recommendation,
           recommendedBreakType: recommendedType,
-          aiLoading: false
-        });
+          aiLoading: false,
+          showLoginModal: false
+          // Preserve existing login state (isLoggedIn, userEmail)
+        }));
       }
     } catch (error) {
       console.error('Failed to load user data:', error);
@@ -287,6 +317,58 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     }
   };
 
+  const handleLogin = async (email: string, password: string) => {
+    // For now, simulate a successful login
+    // In a real app, this would make an API call to authenticate
+    console.log('Login attempt:', { email, password });
+    
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // For demo purposes, accept any email/password combination
+    setState(prev => ({
+      ...prev,
+      isLoggedIn: true,
+      userEmail: email,
+      showLoginModal: false
+    }));
+    
+    // Store login state in Chrome storage separately
+    await chrome.storage.local.set({
+      'eyezen_login_state': {
+        isLoggedIn: true,
+        userEmail: email,
+        loginTime: Date.now()
+      }
+    });
+  };
+
+  const handleSignup = async (email: string, password: string, name: string) => {
+    // For now, simulate a successful signup
+    // In a real app, this would make an API call to create an account
+    console.log('Signup attempt:', { email, password, name });
+    
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // For demo purposes, accept any signup
+    setState(prev => ({
+      ...prev,
+      isLoggedIn: true,
+      userEmail: email,
+      showLoginModal: false
+    }));
+    
+    // Store login state in Chrome storage separately
+    await chrome.storage.local.set({
+      'eyezen_login_state': {
+        isLoggedIn: true,
+        userEmail: email,
+        loginTime: Date.now()
+      }
+    });
+  };
+
   if (state.isLoading) {
     return (
       <div className="w-[380px] h-[550px] bg-white flex items-center justify-center">
@@ -308,6 +390,13 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
            onClose={() => setState(prev => ({ ...prev, showCameraPermissionPopup: false }))}
          />
        )}
+       
+      <LoginModal
+        isVisible={state.showLoginModal}
+        onClose={() => setState(prev => ({ ...prev, showLoginModal: false }))}
+        onLogin={handleLogin}
+        onSignup={handleSignup}
+      />
       <div className="w-[380px] h-[550px] bg-white overflow-hidden flex flex-col">
       {/* Header */}
       <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4">
@@ -319,15 +408,35 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
               <p className="text-blue-100 text-xs opacity-90">Eye Health Monitor</p>
             </div>
           </div>
-          <button
-            onClick={onOpenSettings}
-            className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-            title="Open Dashboard"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          </button>
+          {state.isLoggedIn ? (
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-blue-100 opacity-90 truncate max-w-20">
+                {state.userEmail.split('@')[0]}
+              </span>
+              <button
+                onClick={async () => {
+                  await chrome.storage.local.remove(['eyezen_login_state']);
+                  setState(prev => ({ ...prev, isLoggedIn: false, userEmail: '' }));
+                }}
+                className="p-1 hover:bg-white/20 rounded transition-colors"
+                title="Logout"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setState(prev => ({ ...prev, showLoginModal: true }))}
+              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              title="Login"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </button>
+          )}
         </div>
         
         {/* Camera Control - Most Important */}

@@ -318,55 +318,110 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
   };
 
   const handleLogin = async (email: string, password: string) => {
-    // For now, simulate a successful login
-    // In a real app, this would make an API call to authenticate
-    console.log('Login attempt:', { email, password });
+    console.log('Login attempt:', { email });
     
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // For demo purposes, accept any email/password combination
-    setState(prev => ({
-      ...prev,
-      isLoggedIn: true,
-      userEmail: email,
-      showLoginModal: false
-    }));
-    
-    // Store login state in Chrome storage separately
-    await chrome.storage.local.set({
-      'eyezen_login_state': {
+    try {
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Get registered users from storage
+      const result = await chrome.storage.local.get(['eyezen_users']);
+      const users = result.eyezen_users || {};
+      
+      // Check if user exists
+      if (!users[email]) {
+        throw new Error('No account found with this email address. Please sign up first.');
+      }
+      
+      // Verify password
+      if (users[email].password !== password) {
+        throw new Error('Incorrect password. Please try again.');
+      }
+      
+      // Successful login
+      setState(prev => ({
+        ...prev,
         isLoggedIn: true,
         userEmail: email,
-        loginTime: Date.now()
-      }
-    });
+        showLoginModal: false
+      }));
+      
+      // Store login state in Chrome storage
+      await chrome.storage.local.set({
+        'eyezen_login_state': {
+          isLoggedIn: true,
+          userEmail: email,
+          loginTime: Date.now()
+        }
+      });
+      
+    } catch (error) {
+      // Re-throw the error to be handled by LoginModal
+      throw error;
+    }
   };
 
   const handleSignup = async (email: string, password: string, name: string) => {
-    // For now, simulate a successful signup
-    // In a real app, this would make an API call to create an account
-    console.log('Signup attempt:', { email, password, name });
+    console.log('Signup attempt:', { email, name });
     
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // For demo purposes, accept any signup
-    setState(prev => ({
-      ...prev,
-      isLoggedIn: true,
-      userEmail: email,
-      showLoginModal: false
-    }));
-    
-    // Store login state in Chrome storage separately
-    await chrome.storage.local.set({
-      'eyezen_login_state': {
+    try {
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Get existing users from storage
+      const result = await chrome.storage.local.get(['eyezen_users']);
+      const users = result.eyezen_users || {};
+      
+      // Check if user already exists
+      if (users[email]) {
+        throw new Error('An account with this email already exists. Please login instead.');
+      }
+      
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        throw new Error('Please enter a valid email address.');
+      }
+      
+      // Validate password strength
+      if (password.length < 6) {
+        throw new Error('Password must be at least 6 characters long.');
+      }
+      
+      // Create new user
+      const newUser = {
+        email,
+        password,
+        name,
+        createdAt: Date.now(),
+        verified: true // Set to true after email verification
+      };
+      
+      // Store user in users database
+      users[email] = newUser;
+      await chrome.storage.local.set({ 'eyezen_users': users });
+      
+      // Successful signup - log them in
+      setState(prev => ({
+        ...prev,
         isLoggedIn: true,
         userEmail: email,
-        loginTime: Date.now()
-      }
-    });
+        showLoginModal: false
+      }));
+      
+      // Store login state
+      await chrome.storage.local.set({
+        'eyezen_login_state': {
+          isLoggedIn: true,
+          userEmail: email,
+          loginTime: Date.now()
+        }
+      });
+      
+    } catch (error) {
+      // Re-throw the error to be handled by LoginModal
+      throw error;
+    }
   };
 
   if (state.isLoading) {

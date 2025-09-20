@@ -79,7 +79,7 @@ const CameraPermissionPopup: React.FC<CameraPermissionPopupProps> = ({
         isAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
       }`}>
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-t-lg">
+        <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4 rounded-t-lg">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -132,13 +132,13 @@ const CameraPermissionPopup: React.FC<CameraPermissionPopupProps> = ({
             </button>
             <button
               onClick={handleApprove}
-              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-300"
             >
               OK
             </button>
           </div>
           
-          <p className="text-xs text-gray-500 text-center mt-3">
+          <p className="text-xs text-gray-500 text-center mt-3 whitespace-nowrap">
             You can change this setting anytime in the extension options.
           </p>
         </div>

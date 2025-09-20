@@ -14,6 +14,10 @@ export declare class ChromeStorageService {
      */
     static initialize(): Promise<void>;
     /**
+     * Check if Chrome API is available
+     */
+    private static isChromeApiAvailable;
+    /**
      * Get complete user data
      */
     static getUserData(): Promise<UserData | null>;

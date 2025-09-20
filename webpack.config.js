@@ -16,7 +16,8 @@ module.exports = (env, argv) => {
     output: {
       path: path.resolve(__dirname, 'dist'),
       filename: '[name].js',
-      clean: true
+      clean: true,
+      strictModuleExceptionHandling: false
     },
     module: {
       rules: [
@@ -104,12 +105,14 @@ module.exports = (env, argv) => {
         chunks: 'all',
         cacheGroups: {
           vendor: {
-            test: /[\\/]node_modules[\\/]/,
+            test: /[\\\/]node_modules[\\\/]/,
             name: 'vendors',
             chunks: 'all'
           }
         }
-      }
+      },
+      minimize: isProduction,
+      usedExports: false
     }
   };
 };

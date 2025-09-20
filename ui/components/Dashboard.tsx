@@ -97,17 +97,17 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
     const stats = calculateTodayStats();
     
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {/* Today's KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Eye Score</p>
-                <p className="text-2xl font-bold text-blue-600">{userData.score.daily}</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600">Eye Score</p>
+                <p className="text-xl sm:text-2xl font-bold text-blue-600">{userData.score.daily}</p>
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </div>
@@ -123,14 +123,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Breaks Today</p>
-                <p className="text-2xl font-bold text-green-600">{stats.completedBreaks}</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600">Breaks Today</p>
+                <p className="text-xl sm:text-2xl font-bold text-green-600">{stats.completedBreaks}</p>
               </div>
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
@@ -146,14 +146,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Avg Fatigue</p>
-                <p className="text-2xl font-bold text-orange-600">{stats.avgFatigue}%</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600">Avg Fatigue</p>
+                <p className="text-xl sm:text-2xl font-bold text-orange-600">{stats.avgFatigue}%</p>
               </div>
-              <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
@@ -169,14 +169,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Break Time</p>
-                <p className="text-2xl font-bold text-purple-600">{stats.totalBreakTime}m</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600">Break Time</p>
+                <p className="text-xl sm:text-2xl font-bold text-purple-600">{stats.totalBreakTime}m</p>
               </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
@@ -189,15 +189,15 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
 
         {/* Weekly Summary */}
         {state.weeklyData && (
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Weekly Summary</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Weekly Summary</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               <div>
-                <h4 className="font-medium text-gray-700 mb-2">Improvements</h4>
-                <ul className="space-y-1">
+                <h4 className="font-medium text-gray-700 mb-2 text-sm sm:text-base">Improvements</h4>
+                <ul className="space-y-2">
                   {state.weeklyData.improvements.map((improvement, index) => (
-                    <li key={index} className="text-sm text-green-700 flex items-center">
-                      <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <li key={index} className="text-xs sm:text-sm text-green-700 flex items-start">
+                      <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
                       {improvement}
@@ -206,11 +206,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
                 </ul>
               </div>
               <div>
-                <h4 className="font-medium text-gray-700 mb-2">Recommendations</h4>
-                <ul className="space-y-1">
+                <h4 className="font-medium text-gray-700 mb-2 text-sm sm:text-base">Recommendations</h4>
+                <ul className="space-y-2">
                   {state.weeklyData.recommendations.map((rec, index) => (
-                    <li key={index} className="text-sm text-blue-700 flex items-center">
-                      <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <li key={index} className="text-xs sm:text-sm text-blue-700 flex items-start">
+                      <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                       </svg>
                       {rec}
@@ -429,16 +429,16 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">EyeZen Dashboard</h1>
-          <p className="text-gray-600">Monitor your eye health and manage your settings</p>
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">EyeZen Dashboard</h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">Monitor your eye health and manage your settings</p>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="border-b border-gray-200 mb-6">
-          <nav className="-mb-px flex space-x-8">
+        <div className="border-b border-gray-200 mb-4 sm:mb-6">
+          <nav className="-mb-px flex space-x-4 sm:space-x-6 lg:space-x-8 overflow-x-auto scrollbar-hide">
             {[
               { id: 'overview', label: 'Overview', icon: '📊' },
               { id: 'analytics', label: 'Analytics', icon: '📈' },
@@ -449,14 +449,15 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
               <button
                 key={tab.id}
                 onClick={() => setState(prev => ({ ...prev, activeTab: tab.id as any }))}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                className={`py-3 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap flex-shrink-0 ${
                   state.activeTab === tab.id
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                <span className="mr-2">{tab.icon}</span>
-                {tab.label}
+                <span className="mr-1 sm:mr-2 text-sm sm:text-base">{tab.icon}</span>
+                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="sm:hidden">{tab.label.slice(0, 3)}</span>
               </button>
             ))}
           </nav>

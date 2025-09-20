@@ -41,12 +41,10 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   root.render(
-    <React.StrictMode>
-      <Popup 
-        onStartBreak={handleStartBreak}
-        onOpenSettings={handleOpenSettings}
-      />
-    </React.StrictMode>
+    <Popup 
+      onStartBreak={handleStartBreak}
+      onOpenSettings={handleOpenSettings}
+    />
   );
 });
 

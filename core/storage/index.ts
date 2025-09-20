@@ -44,6 +44,10 @@ export class ChromeStorageService {
    */
   static async initialize(): Promise<void> {
     try {
+      if (!this.isChromeApiAvailable()) {
+        console.warn('Chrome API not available, skipping initialization');
+        return;
+      }
       const existingData = await this.getUserData();
       if (!existingData) {
         const defaultUserData: UserData = {
@@ -69,10 +73,23 @@ export class ChromeStorageService {
   }
 
   /**
+   * Check if Chrome API is available
+   */
+  private static isChromeApiAvailable(): boolean {
+    return typeof chrome !== 'undefined' && 
+           chrome.storage !== undefined && 
+           chrome.storage.local !== undefined;
+  }
+
+  /**
    * Get complete user data
    */
   static async getUserData(): Promise<UserData | null> {
     try {
+      if (!this.isChromeApiAvailable()) {
+        console.warn('Chrome API not available, returning mock data');
+        return null;
+      }
       const result = await chrome.storage.local.get([this.STORAGE_KEYS.USER_DATA]);
       return result[this.STORAGE_KEYS.USER_DATA] || null;
     } catch (error) {
@@ -86,6 +103,10 @@ export class ChromeStorageService {
    */
   static async saveUserData(userData: UserData): Promise<void> {
     try {
+      if (!this.isChromeApiAvailable()) {
+        console.warn('Chrome API not available, skipping save');
+        return;
+      }
       userData.lastUpdated = Date.now();
       await chrome.storage.local.set({
         [this.STORAGE_KEYS.USER_DATA]: userData

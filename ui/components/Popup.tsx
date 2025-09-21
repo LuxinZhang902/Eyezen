@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { UserStatus, EyeScore, BreakType } from '../../types/index';
+import { UserStatus, EyeScore, BreakType, PostureStatus, EyeMetrics } from '../../types/index';
 import { ChromeStorageService } from '../../core/storage/index';
 import { ChromeAIService } from '../../core/api/openai-service';
 import { AICoachService } from '../../core/coach/index';
@@ -67,9 +67,29 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     // Set up periodic permission check to detect manual permission changes
     const permissionCheckInterval = setInterval(checkCameraPermissionStatus, 5000); // Check every 5 seconds
     
+    // Set up periodic camera state validation
+    const stateValidationInterval = setInterval(() => {
+      validateCameraState();
+    }, 3000); // Check every 3 seconds
+    
+    // Set up message listener for eye metrics from CV worker
+    const messageListener = (message: any, sender: any, sendResponse: any) => {
+      if (message.type === 'EYE_METRICS') {
+        handleEyeMetrics(message.data);
+      }
+    };
+    
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      chrome.runtime.onMessage.addListener(messageListener);
+    }
+    
     return () => {
       clearInterval(interval);
       clearInterval(permissionCheckInterval);
+      clearInterval(stateValidationInterval);
+      if (typeof chrome !== 'undefined' && chrome.runtime) {
+        chrome.runtime.onMessage.removeListener(messageListener);
+      }
     };
   }, []);
 
@@ -162,6 +182,63 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     } catch (error) {
       console.error('Failed to load user data:', error);
       setState((prev: PopupState) => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  // Handle eye metrics from CV worker
+  const handleEyeMetrics = async (eyeMetrics: any) => {
+    try {
+      console.log('Received eye metrics:', eyeMetrics);
+      
+      // Create properly structured EyeMetrics object
+      const metricsData = {
+        timestamp: Date.now(),
+        blinkRate: eyeMetrics.blinkRate || 0,
+        fatigueIndex: eyeMetrics.fatigueIndex || 0,
+        posture: eyeMetrics.posture || 'unknown',
+        earValue: eyeMetrics.earLeft || eyeMetrics.earRight || 0,
+        perclosValue: eyeMetrics.perclos || 0
+      };
+      
+      // Save metrics to storage
+      await ChromeStorageService.addMetrics(metricsData);
+      
+      // Update UI state with new metrics
+      const newScore = Math.max(0, Math.min(100, 100 - (eyeMetrics.fatigueIndex * 100)));
+      const newStatus = determineUserStatus(newScore, [eyeMetrics]);
+      
+      setState(prev => ({
+        ...prev,
+        status: newStatus,
+        eyeScore: {
+          ...prev.eyeScore,
+          current: Math.round(newScore)
+        }
+      }));
+      
+      // Generate AI recommendation based on current metrics
+      if (eyeMetrics.fatigueIndex > 0.7) {
+        setState(prev => ({
+          ...prev,
+          aiRecommendation: 'High eye strain detected! Take a 15-minute wellness break immediately.',
+          recommendedBreakType: BreakType.LONG
+        }));
+      } else if (eyeMetrics.fatigueIndex > 0.4) {
+        setState(prev => ({
+          ...prev,
+          aiRecommendation: 'Moderate eye fatigue detected. Consider a 5-minute guided break.',
+          recommendedBreakType: BreakType.SHORT
+        }));
+      } else if (eyeMetrics.blinkRate < 10) {
+        setState(prev => ({
+          ...prev,
+          aiRecommendation: 'Low blink rate detected. Remember to blink more frequently!',
+          recommendedBreakType: BreakType.MICRO
+        }));
+      }
+      
+    } catch (error) {
+      console.error('Error handling eye metrics:', error);
     }
   };
 
@@ -265,10 +342,8 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
 
   const toggleCamera = async () => {
     try {
-      const stream = (window as any).eyeZenCameraStream;
-      
-      // If camera stream exists, disable it
-      if (stream) {
+      // Use state.cameraEnabled instead of window flag for more reliable state
+      if (state.cameraEnabled) {
         await stopCameraStream();
       } else {
         // Direct camera access - try to request permission immediately
@@ -345,11 +420,51 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
         );
       }
        // Note: We do NOT automatically initialize camera when permission is granted
-       // Camera should only be activated when user explicitly clicks the toggle button
-     } catch (error) {
-       console.log('Could not check camera permission status:', error);
-     }
-   };
+     // Camera should only be activated when user explicitly clicks the toggle button
+   } catch (error) {
+     console.log('Could not check camera permission status:', error);
+   }
+ };
+
+  const validateCameraState = async () => {
+    try {
+      // Check if there's a mismatch between popup state and offscreen state
+      const popupCameraState = (window as any).eyeZenCameraStream;
+      
+      // Query offscreen document for actual camera state
+      chrome.runtime.sendMessage(
+        { type: 'GET_CAMERA_STATE' },
+        (response) => {
+          if (response && response.isActive !== undefined) {
+            const offscreenCameraState = response.isActive;
+            
+            // If states are mismatched, sync them
+            if (!!popupCameraState !== offscreenCameraState) {
+              console.log('Camera state mismatch detected, syncing...', {
+                popup: !!popupCameraState,
+                offscreen: offscreenCameraState
+              });
+              
+              // Update popup state to match offscreen reality
+              (window as any).eyeZenCameraStream = offscreenCameraState ? true : null;
+              
+              setState(prev => ({
+                ...prev,
+                cameraEnabled: offscreenCameraState
+              }));
+              
+              // Update storage settings
+              ChromeStorageService.updateSettings({
+                cameraEnabled: offscreenCameraState
+              });
+            }
+          }
+        }
+      );
+    } catch (error) {
+      console.log('Could not validate camera state:', error);
+    }
+  };
 
   const initializeCameraStream = async () => {
     try {
@@ -757,9 +872,9 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
               <div className="flex-1">
                 <div className="font-semibold text-sm">Camera Monitoring</div>
                 <div className="text-xs text-blue-100 opacity-90">
-                  {(window as any).eyeZenCameraStream ? 'Active - Tracking eye health' : 'Inactive - Click to enable'}
+                  {state.cameraEnabled ? 'Active - Tracking eye health' : 'Inactive - Click to enable'}
                 </div>
-                {!(window as any).eyeZenCameraStream && (
+                {!state.cameraEnabled && (
                   <button
                     onClick={() => setState(prev => ({ ...prev, showCameraPermissionPopup: true }))}
                     className="text-xs text-blue-200 hover:text-white underline mt-1 transition-colors"
@@ -772,12 +887,12 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
             <button
               onClick={toggleCamera}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/50 ${
-                (window as any).eyeZenCameraStream ? 'bg-green-500 shadow-lg' : 'bg-white/30'
+                state.cameraEnabled ? 'bg-green-500 shadow-lg' : 'bg-white/30'
               }`}
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 shadow-md ${
-                  (window as any).eyeZenCameraStream ? 'translate-x-6' : 'translate-x-1'
+                  state.cameraEnabled ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />
             </button>

@@ -82,38 +82,54 @@ class BackgroundService {
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
   ) {
+    console.log('🔄 Service Worker received message:', message.type || message.action, 'from:', sender.tab?.url || 'extension');
+    
     try {
+      // Handle camera-related messages by forwarding to offscreen document
+      if (message.type === 'REQUEST_CAMERA' || message.type === 'STOP_CAMERA' || message.type === 'GET_CAMERA_STATE') {
+        console.log('📹 Service Worker: Forwarding camera message to offscreen document:', message.type);
+        await this.forwardToOffscreenDocument(message, sendResponse);
+        return true;
+      }
+      
+      // Handle regular service worker actions
       switch (message.action) {
         case 'START_BREAK':
+          console.log('🛑 Service Worker: Starting break:', message.breakType);
           await this.startBreak(message.breakType);
           sendResponse({ success: true });
           break;
           
         case 'END_BREAK':
+          console.log('✅ Service Worker: Ending break:', message.breakId);
           await this.endBreak(message.breakId);
           sendResponse({ success: true });
           break;
           
         case 'UPDATE_SETTINGS':
+          console.log('⚙️ Service Worker: Updating settings');
           await this.updateSettings(message.settings);
           sendResponse({ success: true });
           break;
           
         case 'GET_STATUS':
           const status = await this.getStatus();
+          console.log('📊 Service Worker: Returning status');
           sendResponse({ success: true, data: status });
           break;
           
         case 'SNOOZE_REMINDER':
+          console.log('😴 Service Worker: Snoozing reminder for', message.minutes || 5, 'minutes');
           await this.snoozeReminder(message.minutes || 5);
           sendResponse({ success: true });
           break;
           
         default:
+          console.warn('❓ Service Worker: Unknown action:', message.action || message.type);
           sendResponse({ success: false, error: 'Unknown action' });
       }
     } catch (error) {
-      console.error('Error handling message:', error);
+      console.error('❌ Service Worker: Error handling message:', error);
       sendResponse({ success: false, error: String(error) });
     }
     
@@ -415,6 +431,41 @@ class BackgroundService {
     } catch (error) {
       console.error('Error snoozing reminder:', error);
       throw error;
+    }
+  }
+
+  private async forwardToOffscreenDocument(message: any, sendResponse: (response?: any) => void) {
+    try {
+      // Check if offscreen document exists
+      const existingContexts = await chrome.runtime.getContexts({});
+      const offscreenDocument = existingContexts.find(
+        (context) => context.contextType === 'OFFSCREEN_DOCUMENT'
+      );
+      
+      // Create offscreen document if it doesn't exist
+      if (!offscreenDocument) {
+        console.log('📄 Creating offscreen document for camera access');
+        await chrome.offscreen.createDocument({
+          url: 'offscreen.html',
+          reasons: [chrome.offscreen.Reason.USER_MEDIA],
+          justification: 'Camera access for eye health monitoring'
+        });
+      }
+      
+      // Forward message to offscreen document
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('❌ Failed to forward message to offscreen document:', chrome.runtime.lastError.message);
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+          return;
+        }
+        
+        console.log('✅ Message forwarded successfully, response:', response);
+        sendResponse(response);
+      });
+    } catch (error) {
+      console.error('❌ Error forwarding message to offscreen document:', error);
+      sendResponse({ success: false, error: String(error) });
     }
   }
 

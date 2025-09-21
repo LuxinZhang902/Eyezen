@@ -7,6 +7,10 @@
 // MediaPipe imports - will be loaded dynamically
 declare const FaceLandmarker: any;
 declare const FilesetResolver: any;
+declare const ModuleFactory: any;
+
+// Worker context declarations
+declare function importScripts(...urls: string[]): void;
 
 import { EARCalculator, PERCLOSCalculator, BlinkDetector, HeadPoseEstimator } from '../../types/mediapipe';
 import { EyeMetrics, PostureStatus } from '../../types/index';
@@ -45,6 +49,7 @@ class CVWorker {
    */
   private async handleMessage(event: MessageEvent<WorkerMessage>): Promise<void> {
     const { type, data } = event.data;
+    console.log('🔧 CV Worker received message:', type, data ? 'with data' : 'no data');
 
     try {
       switch (type) {
@@ -74,9 +79,14 @@ class CVWorker {
    */
   private async initialize(config: { modelPath: string }): Promise<void> {
     try {
-      // Initialize MediaPipe FilesetResolver
+      console.log('🚀 CV Worker: Initializing MediaPipe Face Landmarker...');
+      
+      // Load MediaPipe scripts dynamically
+      await this.loadMediaPipeScripts();
+      
+      // Initialize MediaPipe FilesetResolver with local WASM files
       const vision = await FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+        '/assets/wasm'
       );
 
       // Create Face Landmarker
@@ -94,6 +104,7 @@ class CVWorker {
         outputFacialTransformationMatrixes: false
       });
 
+      console.log('✅ CV Worker: MediaPipe Face Landmarker initialized successfully');
       this.postMessage({
         type: 'ready',
         data: { message: 'CV Worker initialized successfully' }
@@ -101,8 +112,32 @@ class CVWorker {
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ CV Worker: Failed to initialize MediaPipe:', error);
       this.postError(`Failed to initialize MediaPipe: ${errorMessage}`);
     }
+  }
+
+  /**
+   * Load MediaPipe scripts dynamically in worker context
+   */
+  private async loadMediaPipeScripts(): Promise<void> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        console.log('📦 CV Worker: Loading MediaPipe scripts...');
+        
+        // Load MediaPipe worker loader from local assets
+        importScripts('/assets/mediapipe-worker-loader.js');
+        
+        // Initialize MediaPipe using the worker loader
+        await (globalThis as any).MediaPipeWorkerLoader.loadVisionTasks();
+        
+        console.log('✅ CV Worker: MediaPipe scripts loaded successfully');
+        resolve();
+      } catch (error) {
+        console.error('❌ CV Worker: Failed to load MediaPipe scripts:', error);
+        reject(error);
+      }
+    });
   }
 
   /**
@@ -126,6 +161,12 @@ class CVWorker {
     try {
       const { imageData, timestamp } = frameData;
       
+      this.frameCount++;
+      
+      if (this.frameCount % 30 === 0) { // Log every 30 frames (~2 seconds)
+        console.log(`📊 CV Worker: Processing frame ${this.frameCount}, FPS: ${(1000 / this.frameInterval).toFixed(1)}`);
+      }
+      
       // Create HTMLCanvasElement from ImageData for MediaPipe
       const canvas = new OffscreenCanvas(imageData.width, imageData.height);
       const ctx = canvas.getContext('2d')!;
@@ -141,20 +182,31 @@ class CVWorker {
       if (results.faceLandmarks && results.faceLandmarks.length > 0) {
         const metrics = this.extractMetrics(results.faceLandmarks[0], timestamp);
         
+        console.log('👁️ CV Worker: Eye metrics calculated:', {
+          blinkRate: metrics.blinkRate,
+          fatigueIndex: metrics.fatigueIndex,
+          earValue: metrics.earValue,
+          perclosValue: metrics.perclosValue
+        });
+        
         this.postMessage({
           type: 'metrics',
           data: metrics
         });
+      } else {
+        if (this.frameCount % 60 === 0) { // Log every 60 frames when no face detected
+          console.log('👤 CV Worker: No face detected in frame');
+        }
       }
 
       // Clean up canvas immediately
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
       this.lastFrameTime = currentTime;
-      this.frameCount++;
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ CV Worker: Frame processing error:', error);
       this.postError(`Frame processing error: ${errorMessage}`);
     }
   }

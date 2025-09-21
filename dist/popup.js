@@ -1569,7 +1569,12 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
         loadLoginState();
         // Set up periodic updates
         const interval = setInterval(loadUserData, 30000); // Update every 30 seconds
-        return () => clearInterval(interval);
+        // Set up periodic permission check to detect manual permission changes
+        const permissionCheckInterval = setInterval(checkCameraPermissionStatus, 5000); // Check every 5 seconds
+        return () => {
+            clearInterval(interval);
+            clearInterval(permissionCheckInterval);
+        };
     }, []);
     const loadLoginState = async () => {
         try {
@@ -1622,17 +1627,9 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
                     recommendedType = _types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.SHORT;
                     recommendation = 'Moderate eye fatigue. A 5-minute guided relaxation break is recommended.';
                 }
-                // Initialize camera stream flag based on settings
-                // Only set as active if camera is enabled and not in metrics-only mode
-                if (userData.settings.cameraEnabled && !userData.settings.metricsOnly) {
-                    // Check if we should show permission popup for first-time users
-                    if (!window.eyeZenCameraStream) {
-                        window.eyeZenCameraStream = null; // Will trigger permission popup when toggled
-                    }
-                }
-                else {
-                    window.eyeZenCameraStream = null;
-                }
+                // Initialize camera stream flag - do NOT automatically start camera
+                // Camera should only be activated when user explicitly clicks the toggle
+                window.eyeZenCameraStream = null;
                 setState(prev => ({
                     ...prev,
                     status: currentStatus,
@@ -1756,17 +1753,7 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
             const stream = window.eyeZenCameraStream;
             // If camera stream exists, disable it
             if (stream) {
-                stream.getTracks().forEach((track) => track.stop());
-                window.eyeZenCameraStream = null;
-                console.log('Camera deactivated');
-                await _core_storage_index__WEBPACK_IMPORTED_MODULE_3__.ChromeStorageService.updateSettings({
-                    cameraEnabled: false
-                });
-                setState(prev => ({
-                    ...prev,
-                    cameraEnabled: false,
-                    showCameraPermissionPopup: false
-                }));
+                await stopCameraStream();
             }
             else {
                 // Direct camera access - try to request permission immediately
@@ -1777,8 +1764,126 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
             console.error('Failed to toggle camera:', error);
         }
     };
+    const stopCameraStream = async () => {
+        try {
+            // Stop camera through offscreen document
+            chrome.runtime.sendMessage({ type: 'STOP_CAMERA' }, (response) => {
+                if (response?.success) {
+                    console.log('Camera stopped successfully');
+                }
+            });
+            // Clear camera stream flag
+            window.eyeZenCameraStream = null;
+            await _core_storage_index__WEBPACK_IMPORTED_MODULE_3__.ChromeStorageService.updateSettings({
+                cameraEnabled: false
+            });
+            setState(prev => ({
+                ...prev,
+                cameraEnabled: false,
+                showCameraPermissionPopup: false
+            }));
+            console.log('Camera deactivated');
+        }
+        catch (error) {
+            console.error('Failed to stop camera:', error);
+        }
+    };
+    const checkCameraPermissionStatus = async () => {
+        try {
+            // Check if camera permission is still granted
+            const permissionStatus = await navigator.permissions.query({ name: 'camera' });
+            const currentStream = window.eyeZenCameraStream;
+            if (permissionStatus.state === 'denied' && currentStream) {
+                // Permission was revoked but extension still thinks camera is active
+                console.log('Camera permission revoked, updating extension state');
+                // Clear camera stream flag
+                window.eyeZenCameraStream = null;
+                // Update settings and state
+                await _core_storage_index__WEBPACK_IMPORTED_MODULE_3__.ChromeStorageService.updateSettings({
+                    cameraEnabled: false
+                });
+                setState(prev => ({
+                    ...prev,
+                    cameraEnabled: false,
+                    showCameraPermissionPopup: false
+                }));
+                // Stop any active camera stream in offscreen document
+                chrome.runtime.sendMessage({ type: 'STOP_CAMERA' }, (response) => {
+                    if (response?.success) {
+                        console.log('Camera stopped due to permission revocation');
+                    }
+                });
+            }
+            // Note: We do NOT automatically initialize camera when permission is granted
+            // Camera should only be activated when user explicitly clicks the toggle button
+        }
+        catch (error) {
+            console.log('Could not check camera permission status:', error);
+        }
+    };
+    const initializeCameraStream = async () => {
+        try {
+            // Create offscreen document if it doesn't exist
+            const existingContexts = await chrome.runtime.getContexts({});
+            const offscreenDocument = existingContexts.find((context) => context.contextType === 'OFFSCREEN_DOCUMENT');
+            if (!offscreenDocument) {
+                await chrome.offscreen.createDocument({
+                    url: 'offscreen.html',
+                    reasons: [chrome.offscreen.Reason.USER_MEDIA],
+                    justification: 'Camera access for eye health monitoring'
+                });
+            }
+            // Request camera access through offscreen document
+            const response = await new Promise((resolve, reject) => {
+                chrome.runtime.sendMessage({ type: 'REQUEST_CAMERA' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                        return;
+                    }
+                    if (!response) {
+                        reject(new Error('No response received from offscreen document'));
+                        return;
+                    }
+                    resolve(response);
+                });
+            });
+            if (response.success) {
+                // Set camera stream flag
+                window.eyeZenCameraStream = true;
+                console.log('Camera stream initialized successfully');
+            }
+            else {
+                window.eyeZenCameraStream = null;
+                console.log('Failed to initialize camera stream:', response.error);
+            }
+        }
+        catch (error) {
+            console.error('Failed to initialize camera stream:', error);
+            window.eyeZenCameraStream = null;
+        }
+    };
     const requestCameraDirectly = async () => {
         try {
+            // Show user instruction before requesting camera access
+            const userConfirmed = confirm('📹 Camera Permission Required\n\n' +
+                'This will request camera access for AI eye health monitoring.\n\n' +
+                '• Chrome may show a permission dialog\n' +
+                '• Click "Allow" when prompted\n' +
+                '• If blocked, you can enable it later in Chrome settings\n\n' +
+                'Continue with camera request? (Cancel for timer-only mode)');
+            if (!userConfirmed) {
+                // User cancelled - set to metrics-only mode
+                await _core_storage_index__WEBPACK_IMPORTED_MODULE_3__.ChromeStorageService.updateSettings({
+                    cameraEnabled: false,
+                    metricsOnly: true
+                });
+                setState(prev => ({
+                    ...prev,
+                    cameraEnabled: false,
+                    isFeatureRestricted: true
+                }));
+                return;
+            }
             // Create offscreen document if it doesn't exist
             const existingContexts = await chrome.runtime.getContexts({});
             const offscreenDocument = existingContexts.find((context) => context.contextType === 'OFFSCREEN_DOCUMENT');
@@ -1819,7 +1924,7 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
                 }));
                 console.log('Camera activated successfully');
                 // Show brief success notification
-                alert('🎉 Camera access granted! AI eye health monitoring is now active.');
+                alert('🎉 Success! Camera is now active and AI eye health monitoring is running.');
             }
             else {
                 // Handle camera permission denial gracefully
@@ -1837,15 +1942,23 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
                     showCameraPermissionPopup: false,
                     isFeatureRestricted: true
                 }));
-                // Show user-friendly message with instructions
+                // Show detailed instructions for enabling camera access
                 const message = `${response.error || 'Camera access was denied.'}
 
-💡 To enable full AI features:
-1. Click the camera icon in Chrome's address bar
-2. Select "Always allow" for camera access
-3. Click the camera toggle again
+🔧 To enable camera access:
 
-For now, you can use basic timer reminders.`;
+**Method 1 - Chrome Address Bar:**
+1. Look for the camera icon (🎥) in Chrome's address bar
+2. Click it and select "Always allow"
+3. Refresh this extension
+
+**Method 2 - Chrome Settings:**
+1. Go to Chrome Settings → Privacy and Security → Site Settings
+2. Click "Camera" → find this extension
+3. Change from "Ask" to "Allow"
+4. Refresh this extension
+
+✅ You can still use basic timer reminders without camera access.`;
                 alert(message);
             }
         }

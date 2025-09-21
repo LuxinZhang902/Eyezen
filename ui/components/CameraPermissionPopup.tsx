@@ -29,15 +29,77 @@ const CameraPermissionPopup: React.FC<CameraPermissionPopupProps> = ({
 
   const handleApprove = async () => {
     try {
-      // Update settings to allow camera access
-      await ChromeStorageService.updateSettings({
-        cameraEnabled: true,
-        metricsOnly: false // Allow full functionality
+      // Create offscreen document if it doesn't exist
+      const existingContexts = await chrome.runtime.getContexts({});
+      const offscreenDocument = existingContexts.find(
+        (context) => context.contextType === 'OFFSCREEN_DOCUMENT'
+      );
+      
+      if (!offscreenDocument) {
+        await chrome.offscreen.createDocument({
+          url: 'offscreen.html',
+          reasons: [chrome.offscreen.Reason.USER_MEDIA],
+          justification: 'Camera access for eye health monitoring'
+        });
+      }
+      
+      // Request camera access through offscreen document
+      const response = await new Promise<{success: boolean; error?: string}>((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          { type: 'REQUEST_CAMERA' },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response) {
+              reject(new Error('No response received from offscreen document'));
+              return;
+            }
+            resolve(response);
+          }
+        );
       });
-      onApprove();
-      handleClose();
+      
+      if (response.success) {
+        // Update settings to allow camera access
+        await ChromeStorageService.updateSettings({
+          cameraEnabled: true,
+          metricsOnly: false // Allow full functionality
+        });
+        
+        console.log('Camera activated successfully');
+        // Show success message
+        alert('🎉 Camera access granted! Full AI-powered eye health monitoring is now active.');
+        onApprove();
+      } else {
+        // Handle camera permission denial gracefully
+        console.warn('Camera access denied:', response.error);
+        
+        // Update settings to metrics-only mode
+        await ChromeStorageService.updateSettings({
+          cameraEnabled: false,
+          metricsOnly: true
+        });
+        
+        // Show user-friendly message with instructions
+        const message = `${response.error || 'Camera access was denied.'}
+
+💡 To enable full AI features later:
+1. Click the camera icon in Chrome's address bar
+2. Select "Always allow" for camera access
+3. Reload the extension
+
+For now, you can still use basic timer reminders.`;
+        alert(message);
+        onApprove(); // Still call onApprove to close the popup
+      }
+      
+      // Don't auto-close the popup - let parent component handle it
     } catch (error) {
       console.error('Failed to approve camera access:', error);
+      // Still call onApprove even if camera permission fails
+      onApprove();
     }
   };
 
@@ -87,7 +149,7 @@ const CameraPermissionPopup: React.FC<CameraPermissionPopupProps> = ({
               </svg>
             </div>
             <div>
-              <h3 className="text-lg font-semibold">Camera Access Detected</h3>
+              <h3 className="text-lg font-semibold">Camera Permission Required</h3>
               <p className="text-sm opacity-90">EyeZen wants to monitor your eye health</p>
             </div>
           </div>
@@ -97,8 +159,8 @@ const CameraPermissionPopup: React.FC<CameraPermissionPopupProps> = ({
         <div className="p-6">
           <div className="mb-4">
             <div className="flex items-center space-x-2 mb-3">
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium text-gray-700">Camera is currently active</span>
+              <div className="w-3 h-3 bg-orange-500 rounded-full animate-pulse"></div>
+              <span className="text-sm font-medium text-gray-700">Camera access needed for AI features</span>
             </div>
             <p className="text-gray-600 text-sm leading-relaxed">
               EyeZen uses your camera to detect eye fatigue and provide personalized break recommendations. 
@@ -106,15 +168,15 @@ const CameraPermissionPopup: React.FC<CameraPermissionPopupProps> = ({
             </p>
           </div>
 
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
             <div className="flex items-start space-x-2">
-              <svg className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div>
-                <p className="text-sm font-medium text-yellow-800">Important Choice</p>
-                <p className="text-xs text-yellow-700 mt-1">
-                  If you reject camera access, you'll only be able to use the set alarm feature.
+                <p className="text-sm font-medium text-blue-800">Next Step</p>
+                <p className="text-xs text-blue-700 mt-1">
+                  Clicking "Allow Camera Access" will show Chrome's permission dialog. Choose "Allow" there to enable full AI features.
                 </p>
               </div>
             </div>
@@ -134,7 +196,7 @@ const CameraPermissionPopup: React.FC<CameraPermissionPopupProps> = ({
               onClick={handleApprove}
               className="flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-300"
             >
-              OK
+              Allow Camera Access
             </button>
           </div>
           

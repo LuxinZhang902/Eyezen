@@ -78,6 +78,14 @@ module.exports = (env, argv) => {
             to: 'manifest.json'
           },
           {
+            from: 'offscreen.html',
+            to: 'offscreen.html'
+          },
+          {
+            from: 'offscreen.js',
+            to: 'offscreen.js'
+          },
+          {
             from: 'ui/assets',
             to: 'assets',
             noErrorOnMissing: true

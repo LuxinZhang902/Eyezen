@@ -1230,16 +1230,67 @@ const CameraPermissionPopup = ({ isVisible, onApprove, onReject, onClose }) => {
     }, [isVisible]);
     const handleApprove = async () => {
         try {
-            // Update settings to allow camera access
-            await _core_storage_index__WEBPACK_IMPORTED_MODULE_2__.ChromeStorageService.updateSettings({
-                cameraEnabled: true,
-                metricsOnly: false // Allow full functionality
+            // Create offscreen document if it doesn't exist
+            const existingContexts = await chrome.runtime.getContexts({});
+            const offscreenDocument = existingContexts.find((context) => context.contextType === 'OFFSCREEN_DOCUMENT');
+            if (!offscreenDocument) {
+                await chrome.offscreen.createDocument({
+                    url: 'offscreen.html',
+                    reasons: [chrome.offscreen.Reason.USER_MEDIA],
+                    justification: 'Camera access for eye health monitoring'
+                });
+            }
+            // Request camera access through offscreen document
+            const response = await new Promise((resolve, reject) => {
+                chrome.runtime.sendMessage({ type: 'REQUEST_CAMERA' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                        return;
+                    }
+                    if (!response) {
+                        reject(new Error('No response received from offscreen document'));
+                        return;
+                    }
+                    resolve(response);
+                });
             });
-            onApprove();
-            handleClose();
+            if (response.success) {
+                // Update settings to allow camera access
+                await _core_storage_index__WEBPACK_IMPORTED_MODULE_2__.ChromeStorageService.updateSettings({
+                    cameraEnabled: true,
+                    metricsOnly: false // Allow full functionality
+                });
+                console.log('Camera activated successfully');
+                // Show success message
+                alert('🎉 Camera access granted! Full AI-powered eye health monitoring is now active.');
+                onApprove();
+            }
+            else {
+                // Handle camera permission denial gracefully
+                console.warn('Camera access denied:', response.error);
+                // Update settings to metrics-only mode
+                await _core_storage_index__WEBPACK_IMPORTED_MODULE_2__.ChromeStorageService.updateSettings({
+                    cameraEnabled: false,
+                    metricsOnly: true
+                });
+                // Show user-friendly message with instructions
+                const message = `${response.error || 'Camera access was denied.'}
+
+💡 To enable full AI features later:
+1. Click the camera icon in Chrome's address bar
+2. Select "Always allow" for camera access
+3. Reload the extension
+
+For now, you can still use basic timer reminders.`;
+                alert(message);
+                onApprove(); // Still call onApprove to close the popup
+            }
+            // Don't auto-close the popup - let parent component handle it
         }
         catch (error) {
             console.error('Failed to approve camera access:', error);
+            // Still call onApprove even if camera permission fails
+            onApprove();
         }
     };
     const handleReject = async () => {
@@ -1264,7 +1315,7 @@ const CameraPermissionPopup = ({ isVisible, onApprove, onReject, onClose }) => {
     };
     if (!isVisible)
         return null;
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "fixed inset-0 z-50 flex items-center justify-center", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: `absolute inset-0 bg-black transition-opacity duration-200 ${isAnimating ? 'opacity-50' : 'opacity-0'}`, onClick: handleClose }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: `relative bg-white rounded-lg shadow-xl max-w-sm mx-4 transform transition-all duration-200 ${isAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4 rounded-t-lg", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center space-x-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "w-8 h-8 bg-white/20 rounded-full flex items-center justify-center", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("svg", { className: "w-5 h-5", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" }) }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("h3", { className: "text-lg font-semibold", children: "Camera Access Detected" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { className: "text-sm opacity-90", children: "EyeZen wants to monitor your eye health" })] })] }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "p-6", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "mb-4", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center space-x-2 mb-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "w-3 h-3 bg-green-500 rounded-full animate-pulse" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "text-sm font-medium text-gray-700", children: "Camera is currently active" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { className: "text-gray-600 text-sm leading-relaxed", children: "EyeZen uses your camera to detect eye fatigue and provide personalized break recommendations. Your privacy is protected - no video is recorded or transmitted." })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-start space-x-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("svg", { className: "w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { className: "text-sm font-medium text-yellow-800", children: "Important Choice" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { className: "text-xs text-yellow-700 mt-1", children: "If you reject camera access, you'll only be able to use the set alarm feature." })] })] }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "px-6 pb-6", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex space-x-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: handleReject, className: "flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-300", children: "Reject" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: handleApprove, className: "flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-300", children: "OK" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { className: "text-xs text-gray-500 text-center mt-3 whitespace-nowrap", children: "You can change this setting anytime in the extension options." })] })] })] }));
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "fixed inset-0 z-50 flex items-center justify-center", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: `absolute inset-0 bg-black transition-opacity duration-200 ${isAnimating ? 'opacity-50' : 'opacity-0'}`, onClick: handleClose }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: `relative bg-white rounded-lg shadow-xl max-w-sm mx-4 transform transition-all duration-200 ${isAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4 rounded-t-lg", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center space-x-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "w-8 h-8 bg-white/20 rounded-full flex items-center justify-center", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("svg", { className: "w-5 h-5", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" }) }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("h3", { className: "text-lg font-semibold", children: "Camera Permission Required" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { className: "text-sm opacity-90", children: "EyeZen wants to monitor your eye health" })] })] }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "p-6", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "mb-4", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center space-x-2 mb-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "w-3 h-3 bg-orange-500 rounded-full animate-pulse" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "text-sm font-medium text-gray-700", children: "Camera access needed for AI features" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { className: "text-gray-600 text-sm leading-relaxed", children: "EyeZen uses your camera to detect eye fatigue and provide personalized break recommendations. Your privacy is protected - no video is recorded or transmitted." })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-start space-x-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("svg", { className: "w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { className: "text-sm font-medium text-blue-800", children: "Next Step" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { className: "text-xs text-blue-700 mt-1", children: "Clicking \"Allow Camera Access\" will show Chrome's permission dialog. Choose \"Allow\" there to enable full AI features." })] })] }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "px-6 pb-6", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex space-x-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: handleReject, className: "flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-300", children: "Reject" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: handleApprove, className: "flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-300", children: "Allow Camera Access" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { className: "text-xs text-gray-500 text-center mt-3 whitespace-nowrap", children: "You can change this setting anytime in the extension options." })] })] })] }));
 };
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (CameraPermissionPopup);
 
@@ -1571,6 +1622,17 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
                     recommendedType = _types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.SHORT;
                     recommendation = 'Moderate eye fatigue. A 5-minute guided relaxation break is recommended.';
                 }
+                // Initialize camera stream flag based on settings
+                // Only set as active if camera is enabled and not in metrics-only mode
+                if (userData.settings.cameraEnabled && !userData.settings.metricsOnly) {
+                    // Check if we should show permission popup for first-time users
+                    if (!window.eyeZenCameraStream) {
+                        window.eyeZenCameraStream = null; // Will trigger permission popup when toggled
+                    }
+                }
+                else {
+                    window.eyeZenCameraStream = null;
+                }
                 setState(prev => ({
                     ...prev,
                     status: currentStatus,
@@ -1691,17 +1753,12 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
     };
     const toggleCamera = async () => {
         try {
-            const settings = await _core_storage_index__WEBPACK_IMPORTED_MODULE_3__.ChromeStorageService.getSettings();
-            const newCameraEnabled = !settings.cameraEnabled;
-            // If enabling camera, show permission popup
-            if (newCameraEnabled) {
-                setState(prev => ({
-                    ...prev,
-                    showCameraPermissionPopup: true
-                }));
-            }
-            else {
-                // If disabling camera, update settings directly
+            const stream = window.eyeZenCameraStream;
+            // If camera stream exists, disable it
+            if (stream) {
+                stream.getTracks().forEach((track) => track.stop());
+                window.eyeZenCameraStream = null;
+                console.log('Camera deactivated');
                 await _core_storage_index__WEBPACK_IMPORTED_MODULE_3__.ChromeStorageService.updateSettings({
                     cameraEnabled: false
                 });
@@ -1711,9 +1768,90 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
                     showCameraPermissionPopup: false
                 }));
             }
+            else {
+                // Direct camera access - try to request permission immediately
+                await requestCameraDirectly();
+            }
         }
         catch (error) {
             console.error('Failed to toggle camera:', error);
+        }
+    };
+    const requestCameraDirectly = async () => {
+        try {
+            // Create offscreen document if it doesn't exist
+            const existingContexts = await chrome.runtime.getContexts({});
+            const offscreenDocument = existingContexts.find((context) => context.contextType === 'OFFSCREEN_DOCUMENT');
+            if (!offscreenDocument) {
+                await chrome.offscreen.createDocument({
+                    url: 'offscreen.html',
+                    reasons: [chrome.offscreen.Reason.USER_MEDIA],
+                    justification: 'Camera access for eye health monitoring'
+                });
+            }
+            // Request camera access through offscreen document
+            const response = await new Promise((resolve, reject) => {
+                chrome.runtime.sendMessage({ type: 'REQUEST_CAMERA' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                        return;
+                    }
+                    if (!response) {
+                        reject(new Error('No response received from offscreen document'));
+                        return;
+                    }
+                    resolve(response);
+                });
+            });
+            if (response.success) {
+                // Update settings to allow camera access
+                await _core_storage_index__WEBPACK_IMPORTED_MODULE_3__.ChromeStorageService.updateSettings({
+                    cameraEnabled: true,
+                    metricsOnly: false
+                });
+                // Set camera stream flag
+                window.eyeZenCameraStream = true;
+                setState(prev => ({
+                    ...prev,
+                    cameraEnabled: true,
+                    showCameraPermissionPopup: false,
+                    isFeatureRestricted: false
+                }));
+                console.log('Camera activated successfully');
+                // Show brief success notification
+                alert('🎉 Camera access granted! AI eye health monitoring is now active.');
+            }
+            else {
+                // Handle camera permission denial gracefully
+                console.warn('Camera access denied:', response.error);
+                // Update settings to metrics-only mode
+                await _core_storage_index__WEBPACK_IMPORTED_MODULE_3__.ChromeStorageService.updateSettings({
+                    cameraEnabled: false,
+                    metricsOnly: true
+                });
+                // Clear camera stream flag
+                window.eyeZenCameraStream = null;
+                setState(prev => ({
+                    ...prev,
+                    cameraEnabled: false,
+                    showCameraPermissionPopup: false,
+                    isFeatureRestricted: true
+                }));
+                // Show user-friendly message with instructions
+                const message = `${response.error || 'Camera access was denied.'}
+
+💡 To enable full AI features:
+1. Click the camera icon in Chrome's address bar
+2. Select "Always allow" for camera access
+3. Click the camera toggle again
+
+For now, you can use basic timer reminders.`;
+                alert(message);
+            }
+        }
+        catch (error) {
+            console.error('Failed to request camera access:', error);
+            alert('Failed to request camera access. Please try again.');
         }
     };
     const handleCameraPermissionApprove = async () => {
@@ -1722,6 +1860,9 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
                 cameraEnabled: true,
                 metricsOnly: false
             });
+            // Set a flag to indicate camera stream should be active
+            // The actual stream is managed by the offscreen document
+            window.eyeZenCameraStream = true;
             setState(prev => ({
                 ...prev,
                 cameraEnabled: true,
@@ -1739,6 +1880,8 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
                 cameraEnabled: false,
                 metricsOnly: true
             });
+            // Clear camera stream flag
+            window.eyeZenCameraStream = null;
             setState(prev => ({
                 ...prev,
                 cameraEnabled: false,
@@ -1846,7 +1989,7 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
     return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.Fragment, { children: [state.showCameraPermissionPopup && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_CameraPermissionPopup__WEBPACK_IMPORTED_MODULE_6__["default"], { isVisible: state.showCameraPermissionPopup, onApprove: handleCameraPermissionApprove, onReject: handleCameraPermissionReject, onClose: () => setState(prev => ({ ...prev, showCameraPermissionPopup: false })) })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_LoginModal__WEBPACK_IMPORTED_MODULE_7__["default"], { isVisible: state.showLoginModal, onClose: () => setState(prev => ({ ...prev, showLoginModal: false })), onLogin: handleLogin, onSignup: handleSignup }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "w-[380px] h-[550px] bg-white overflow-hidden flex flex-col", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center justify-between mb-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center space-x-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-2xl", children: "\uD83D\uDC41\uFE0F" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("h1", { className: "text-lg font-bold", children: "EyeZen" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { className: "text-blue-100 text-xs opacity-90", children: "Eye Health Monitor" })] })] }), state.isLoggedIn ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center space-x-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "text-xs text-blue-100 opacity-90 truncate max-w-20", children: state.userEmail.split('@')[0] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: async () => {
                                                     await chrome.storage.local.remove(['eyezen_login_state']);
                                                     setState(prev => ({ ...prev, isLoggedIn: false, userEmail: '' }));
-                                                }, className: "p-1 hover:bg-white/20 rounded transition-colors", title: "Logout", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("svg", { className: "w-3 h-3", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" }) }) })] })) : ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: () => setState(prev => ({ ...prev, showLoginModal: true })), className: "p-2 hover:bg-white/20 rounded-lg transition-colors", title: "Login", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" }) }) }))] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center justify-between", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center space-x-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-lg", children: "\uD83D\uDCF9" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "font-semibold text-sm", children: "Camera Monitoring" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs text-blue-100 opacity-90", children: state.cameraEnabled && !state.isFeatureRestricted ? 'Active - Tracking eye health' : 'Inactive - Limited features' })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: toggleCamera, className: `relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/50 ${state.cameraEnabled && !state.isFeatureRestricted ? 'bg-green-500 shadow-lg' : 'bg-white/30'}`, children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: `inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 shadow-md ${state.cameraEnabled && !state.isFeatureRestricted ? 'translate-x-6' : 'translate-x-1'}` }) })] }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "p-3", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "text-center mb-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-3xl mb-1", children: getStatusIcon(state.status) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("h2", { className: `text-base font-bold ${getScoreColor(state.eyeScore.current)}`, children: ["Eye Health: ", state.eyeScore.current, "/100"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("p", { className: "text-xs text-gray-600", children: [state.streakDays, " day streak \u2022 ", formatLastBreakTime(state.lastBreakTime)] })] }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "px-4 pb-4 flex-1", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "mb-3 p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.MICRO), className: "w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-400 hover:to-emerald-400 transition-all duration-200 font-medium flex items-center justify-center space-x-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "\u26A1" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "Start Recommended Break with AI" })] }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("h3", { className: "font-semibold text-gray-700 mb-2", children: "Choose Your Break" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "grid grid-cols-3 gap-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.MICRO), className: "p-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors duration-200 text-center border border-blue-200", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xl mb-1", children: "\u26A1" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs font-medium", children: "Quick" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs opacity-70", children: "20 sec" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.SHORT), className: "p-3 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg transition-colors duration-200 text-center border border-green-200", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xl mb-1", children: "\uD83E\uDDD8" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs font-medium", children: "Eye Break" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs opacity-70", children: "5 min" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.LONG), className: "p-3 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg transition-colors duration-200 text-center border border-purple-200", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xl mb-1", children: "\uD83D\uDC86" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs font-medium", children: "Wellness" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs opacity-70", children: "15 min" })] })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: onOpenSettings, className: "w-full mt-7 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors", children: "View detailed dashboard \u2192" })] })] })] }));
+                                                }, className: "p-1 hover:bg-white/20 rounded transition-colors", title: "Logout", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("svg", { className: "w-3 h-3", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" }) }) })] })) : ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: () => setState(prev => ({ ...prev, showLoginModal: true })), className: "p-2 hover:bg-white/20 rounded-lg transition-colors", title: "Login", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" }) }) }))] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center justify-between", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center space-x-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-lg", children: "\uD83D\uDCF9" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex-1", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "font-semibold text-sm", children: "Camera Monitoring" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs text-blue-100 opacity-90", children: window.eyeZenCameraStream ? 'Active - Tracking eye health' : 'Inactive - Click to enable' }), !window.eyeZenCameraStream && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: () => setState(prev => ({ ...prev, showCameraPermissionPopup: true })), className: "text-xs text-blue-200 hover:text-white underline mt-1 transition-colors", children: "Need help? View setup guide" }))] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: toggleCamera, className: `relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/50 ${window.eyeZenCameraStream ? 'bg-green-500 shadow-lg' : 'bg-white/30'}`, children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: `inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 shadow-md ${window.eyeZenCameraStream ? 'translate-x-6' : 'translate-x-1'}` }) })] }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "p-3", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "text-center mb-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-3xl mb-1", children: getStatusIcon(state.status) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("h2", { className: `text-base font-bold ${getScoreColor(state.eyeScore.current)}`, children: ["Eye Health: ", state.eyeScore.current, "/100"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("p", { className: "text-xs text-gray-600", children: [state.streakDays, " day streak \u2022 ", formatLastBreakTime(state.lastBreakTime)] })] }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "px-4 pb-4 flex-1", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "mb-3 p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.MICRO), className: "w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-400 hover:to-emerald-400 transition-all duration-200 font-medium flex items-center justify-center space-x-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "\u26A1" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "Start Recommended Break with AI" })] }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("h3", { className: "font-semibold text-gray-700 mb-2", children: "Choose Your Break" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "grid grid-cols-3 gap-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.MICRO), className: "p-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors duration-200 text-center border border-blue-200", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xl mb-1", children: "\u26A1" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs font-medium", children: "Quick" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs opacity-70", children: "20 sec" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.SHORT), className: "p-3 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg transition-colors duration-200 text-center border border-green-200", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xl mb-1", children: "\uD83E\uDDD8" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs font-medium", children: "Eye Break" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs opacity-70", children: "5 min" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.LONG), className: "p-3 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg transition-colors duration-200 text-center border border-purple-200", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xl mb-1", children: "\uD83D\uDC86" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs font-medium", children: "Wellness" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs opacity-70", children: "15 min" })] })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: onOpenSettings, className: "w-full mt-7 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors", children: "View detailed dashboard \u2192" })] })] })] }));
 };
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (Popup);
 

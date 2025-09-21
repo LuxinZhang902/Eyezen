@@ -127,6 +127,17 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
           recommendation = 'Moderate eye fatigue. A 5-minute guided relaxation break is recommended.';
         }
 
+        // Initialize camera stream flag based on settings
+        // Only set as active if camera is enabled and not in metrics-only mode
+        if (userData.settings.cameraEnabled && !userData.settings.metricsOnly) {
+          // Check if we should show permission popup for first-time users
+          if (!(window as any).eyeZenCameraStream) {
+            (window as any).eyeZenCameraStream = null; // Will trigger permission popup when toggled
+          }
+        } else {
+          (window as any).eyeZenCameraStream = null;
+        }
+        
         setState(prev => ({
           ...prev,
           status: currentStatus,
@@ -255,17 +266,14 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
 
   const toggleCamera = async () => {
     try {
-      const settings = await ChromeStorageService.getSettings();
-      const newCameraEnabled = !settings.cameraEnabled;
+      const stream = (window as any).eyeZenCameraStream;
       
-      // If enabling camera, show permission popup
-      if (newCameraEnabled) {
-        setState(prev => ({
-          ...prev,
-          showCameraPermissionPopup: true
-        }));
-      } else {
-        // If disabling camera, update settings directly
+      // If camera stream exists, disable it
+      if (stream) {
+        stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+        (window as any).eyeZenCameraStream = null;
+        console.log('Camera deactivated');
+        
         await ChromeStorageService.updateSettings({
           cameraEnabled: false
         });
@@ -275,9 +283,103 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
           cameraEnabled: false,
           showCameraPermissionPopup: false
         }));
+      } else {
+        // Direct camera access - try to request permission immediately
+        await requestCameraDirectly();
       }
     } catch (error) {
       console.error('Failed to toggle camera:', error);
+    }
+  };
+  
+  const requestCameraDirectly = async () => {
+    try {
+      // Create offscreen document if it doesn't exist
+      const existingContexts = await chrome.runtime.getContexts({});
+      const offscreenDocument = existingContexts.find(
+        (context) => context.contextType === 'OFFSCREEN_DOCUMENT'
+      );
+      
+      if (!offscreenDocument) {
+        await chrome.offscreen.createDocument({
+          url: 'offscreen.html',
+          reasons: [chrome.offscreen.Reason.USER_MEDIA],
+          justification: 'Camera access for eye health monitoring'
+        });
+      }
+      
+      // Request camera access through offscreen document
+      const response = await new Promise<{success: boolean; error?: string}>((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          { type: 'REQUEST_CAMERA' },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response) {
+              reject(new Error('No response received from offscreen document'));
+              return;
+            }
+            resolve(response);
+          }
+        );
+      });
+      
+      if (response.success) {
+        // Update settings to allow camera access
+        await ChromeStorageService.updateSettings({
+          cameraEnabled: true,
+          metricsOnly: false
+        });
+        
+        // Set camera stream flag
+        (window as any).eyeZenCameraStream = true;
+        
+        setState(prev => ({
+          ...prev,
+          cameraEnabled: true,
+          showCameraPermissionPopup: false,
+          isFeatureRestricted: false
+        }));
+        
+        console.log('Camera activated successfully');
+        // Show brief success notification
+        alert('🎉 Camera access granted! AI eye health monitoring is now active.');
+      } else {
+        // Handle camera permission denial gracefully
+        console.warn('Camera access denied:', response.error);
+        
+        // Update settings to metrics-only mode
+        await ChromeStorageService.updateSettings({
+          cameraEnabled: false,
+          metricsOnly: true
+        });
+        
+        // Clear camera stream flag
+        (window as any).eyeZenCameraStream = null;
+        
+        setState(prev => ({
+          ...prev,
+          cameraEnabled: false,
+          showCameraPermissionPopup: false,
+          isFeatureRestricted: true
+        }));
+        
+        // Show user-friendly message with instructions
+        const message = `${response.error || 'Camera access was denied.'}
+
+💡 To enable full AI features:
+1. Click the camera icon in Chrome's address bar
+2. Select "Always allow" for camera access
+3. Click the camera toggle again
+
+For now, you can use basic timer reminders.`;
+        alert(message);
+      }
+    } catch (error) {
+      console.error('Failed to request camera access:', error);
+      alert('Failed to request camera access. Please try again.');
     }
   };
 
@@ -287,6 +389,10 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
         cameraEnabled: true,
         metricsOnly: false
       });
+      
+      // Set a flag to indicate camera stream should be active
+      // The actual stream is managed by the offscreen document
+      (window as any).eyeZenCameraStream = true;
       
       setState(prev => ({
         ...prev,
@@ -305,6 +411,9 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
         cameraEnabled: false,
         metricsOnly: true
       });
+      
+      // Clear camera stream flag
+      (window as any).eyeZenCameraStream = null;
       
       setState(prev => ({
         ...prev,
@@ -499,22 +608,30 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="text-lg">📹</div>
-              <div>
+              <div className="flex-1">
                 <div className="font-semibold text-sm">Camera Monitoring</div>
                 <div className="text-xs text-blue-100 opacity-90">
-                  {state.cameraEnabled && !state.isFeatureRestricted ? 'Active - Tracking eye health' : 'Inactive - Limited features'}
+                  {(window as any).eyeZenCameraStream ? 'Active - Tracking eye health' : 'Inactive - Click to enable'}
                 </div>
+                {!(window as any).eyeZenCameraStream && (
+                  <button
+                    onClick={() => setState(prev => ({ ...prev, showCameraPermissionPopup: true }))}
+                    className="text-xs text-blue-200 hover:text-white underline mt-1 transition-colors"
+                  >
+                    Need help? View setup guide
+                  </button>
+                )}
               </div>
             </div>
             <button
               onClick={toggleCamera}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/50 ${
-                state.cameraEnabled && !state.isFeatureRestricted ? 'bg-green-500 shadow-lg' : 'bg-white/30'
+                (window as any).eyeZenCameraStream ? 'bg-green-500 shadow-lg' : 'bg-white/30'
               }`}
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 shadow-md ${
-                  state.cameraEnabled && !state.isFeatureRestricted ? 'translate-x-6' : 'translate-x-1'
+                  (window as any).eyeZenCameraStream ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />
             </button>

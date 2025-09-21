@@ -401,14 +401,17 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
   
   const requestCameraDirectly = async () => {
     try {
-      // Show user instruction before requesting camera access
+      // Show user instruction with better explanation of Chrome extension limitations
       const userConfirmed = confirm(
-        '📹 Camera Permission Required\n\n' +
-        'This will request camera access for AI eye health monitoring.\n\n' +
-        '• Chrome may show a permission dialog\n' +
-        '• Click "Allow" when prompted\n' +
-        '• If blocked, you can enable it later in Chrome settings\n\n' +
-        'Continue with camera request? (Cancel for timer-only mode)'
+        '📹 Camera Permission Setup\n\n' +
+        'Chrome extensions require camera permissions to be set to "Allow" for reliable access.\n\n' +
+        'After clicking OK:\n' +
+        '• A permission dialog may appear briefly\n' +
+        '• If it closes quickly, manually set permissions:\n' +
+        '  1. Click the camera icon in Chrome\'s address bar\n' +
+        '  2. Select "Always allow"\n' +
+        '  3. Refresh this extension\n\n' +
+        'Continue? (Cancel for timer-only mode)'
       );
       
       if (!userConfirmed) {
@@ -501,7 +504,10 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
         // Show detailed instructions for enabling camera access
         const message = `${response.error || 'Camera access was denied.'}
 
-🔧 To enable camera access:
+🔧 **Why "Ask" doesn't work:**
+Chrome extension popups close when permission dialogs appear, preventing you from clicking "Allow".
+
+**Solution - Set to "Always Allow":**
 
 **Method 1 - Chrome Address Bar:**
 1. Look for the camera icon (🎥) in Chrome's address bar
@@ -509,7 +515,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
 3. Refresh this extension
 
 **Method 2 - Chrome Settings:**
-1. Go to Chrome Settings → Privacy and Security → Site Settings
+1. Chrome Settings → Privacy and Security → Site Settings
 2. Click "Camera" → find this extension
 3. Change from "Ask" to "Allow"
 4. Refresh this extension

@@ -38,7 +38,7 @@ Detects eye strain locally, guides refreshing eye breaks with AI coaching + Trad
 
 ### Architecture
 
-```bash
+```
 flowchart LR
   subgraph EXT[Chrome Extension (MV3)]
     P[Popup/Dashboard UI]

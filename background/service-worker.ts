@@ -81,15 +81,15 @@ class BackgroundService {
     message: any,
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
-  ) {
+  ): Promise<boolean> {
     console.log('🔄 Service Worker received message:', message.type || message.action, 'from:', sender.tab?.url || 'extension');
     
     try {
       // Handle camera-related messages by forwarding to offscreen document
       if (message.type === 'REQUEST_CAMERA' || message.type === 'STOP_CAMERA' || message.type === 'GET_CAMERA_STATE') {
         console.log('📹 Service Worker: Forwarding camera message to offscreen document:', message.type);
-        await this.forwardToOffscreenDocument(message, sendResponse);
-        return true;
+        this.forwardToOffscreenDocument(message, sendResponse);
+        return true; // Keep message port open for async response
       }
       
       // Handle regular service worker actions
@@ -133,7 +133,7 @@ class BackgroundService {
       sendResponse({ success: false, error: String(error) });
     }
     
-    return true; // Keep message channel open for async response
+    return false; // Close message channel after synchronous response
   }
 
   private async handleInstall(details: chrome.runtime.InstalledDetails) {
@@ -434,38 +434,43 @@ class BackgroundService {
     }
   }
 
-  private async forwardToOffscreenDocument(message: any, sendResponse: (response?: any) => void) {
+  private async ensureOffscreenDocument(): Promise<void> {
+    const existingContexts = await chrome.runtime.getContexts({});
+    const offscreenDocument = existingContexts.find(
+      (context) => context.contextType === 'OFFSCREEN_DOCUMENT'
+    );
+    
+    if (!offscreenDocument) {
+      console.log('📄 Creating offscreen document for camera access');
+      await chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: [chrome.offscreen.Reason.USER_MEDIA],
+        justification: 'Camera access for eye health monitoring'
+      });
+    }
+  }
+
+  private async forwardToOffscreenDocument(message: any, sendResponse: (response?: any) => void): Promise<void> {
     try {
-      // Check if offscreen document exists
-      const existingContexts = await chrome.runtime.getContexts({});
-      const offscreenDocument = existingContexts.find(
-        (context) => context.contextType === 'OFFSCREEN_DOCUMENT'
-      );
+      // Ensure offscreen document exists
+      await this.ensureOffscreenDocument();
       
-      // Create offscreen document if it doesn't exist
-      if (!offscreenDocument) {
-        console.log('📄 Creating offscreen document for camera access');
-        await chrome.offscreen.createDocument({
-          url: 'offscreen.html',
-          reasons: [chrome.offscreen.Reason.USER_MEDIA],
-          justification: 'Camera access for eye health monitoring'
-        });
-      }
+      // Wait a bit for offscreen document to be ready
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Forward message to offscreen document
+      // Send message directly to offscreen document
       chrome.runtime.sendMessage(message, (response) => {
         if (chrome.runtime.lastError) {
-          console.error('❌ Failed to forward message to offscreen document:', chrome.runtime.lastError.message);
+          console.error('Error communicating with offscreen document:', chrome.runtime.lastError);
           sendResponse({ success: false, error: chrome.runtime.lastError.message });
-          return;
+        } else {
+          sendResponse(response);
         }
-        
-        console.log('✅ Message forwarded successfully, response:', response);
-        sendResponse(response);
       });
+      
     } catch (error) {
-      console.error('❌ Error forwarding message to offscreen document:', error);
-      sendResponse({ success: false, error: String(error) });
+      console.error('Error in forwardToOffscreenDocument:', error);
+      sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
     }
   }
 

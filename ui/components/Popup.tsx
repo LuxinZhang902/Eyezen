@@ -360,6 +360,10 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       chrome.runtime.sendMessage(
         { type: 'STOP_CAMERA' },
         (response) => {
+          if (chrome.runtime.lastError) {
+            console.error('❌ Error stopping camera:', chrome.runtime.lastError.message);
+            return;
+          }
           if (response?.success) {
             console.log('Camera stopped successfully');
           }
@@ -413,6 +417,10 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
         chrome.runtime.sendMessage(
           { type: 'STOP_CAMERA' },
           (response) => {
+            if (chrome.runtime.lastError) {
+              console.error('❌ Error stopping camera due to permission revocation:', chrome.runtime.lastError.message);
+              return;
+            }
             if (response?.success) {
               console.log('Camera stopped due to permission revocation');
             }
@@ -428,23 +436,20 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
 
   const validateCameraState = async () => {
     try {
-      // Check if there's a mismatch between popup state and offscreen state
-      const popupCameraState = (window as any).eyeZenCameraStream;
-      
       // Query offscreen document for actual camera state
       chrome.runtime.sendMessage(
         { type: 'GET_CAMERA_STATE' },
         (response) => {
+          if (chrome.runtime.lastError) {
+            console.error('❌ Error validating camera state:', chrome.runtime.lastError.message);
+            return;
+          }
           if (response && response.isActive !== undefined) {
             const offscreenCameraState = response.isActive;
+            const currentReactState = state.cameraEnabled;
             
             // If states are mismatched, sync them
-            if (!!popupCameraState !== offscreenCameraState) {
-              console.log('Camera state mismatch detected, syncing...', {
-                popup: !!popupCameraState,
-                offscreen: offscreenCameraState
-              });
-              
+            if (currentReactState !== offscreenCameraState) {
               // Update popup state to match offscreen reality
               (window as any).eyeZenCameraStream = offscreenCameraState ? true : null;
               

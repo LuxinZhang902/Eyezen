@@ -21,6 +21,7 @@ declare class BackgroundService {
     private updateSettings;
     private getStatus;
     private snoozeReminder;
+    private ensureOffscreenDocument;
     private forwardToOffscreenDocument;
     private setupInitialData;
     private showNotification;

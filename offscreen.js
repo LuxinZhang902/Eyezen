@@ -24,7 +24,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         
         console.log('✅ Camera activated successfully in offscreen document with CV processing');
         
-        // Send success response
+        // Send success response back using sendResponse
         sendResponse({ success: true, message: 'Camera access granted' });
       } catch (error) {
         console.error('Failed to access camera in offscreen document:', error);
@@ -39,10 +39,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           errorMessage = 'Camera is already in use by another application.';
         }
         
+        // Send error response back using sendResponse
         sendResponse({ success: false, error: errorMessage });
       }
     })();
-    return true; // Keep message channel open for async response
+    return true; // Keep message port open for async response
   }
   
   if (message.type === 'STOP_CAMERA') {
@@ -58,20 +59,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           globalThis.eyeZenCameraStream = null;
           console.log('Camera stopped in offscreen document');
         }
+        
+        // Send success response back using sendResponse
         sendResponse({ success: true, message: 'Camera stopped' });
       } catch (error) {
         console.error('Failed to stop camera:', error);
+        
+        // Send error response back using sendResponse
         sendResponse({ success: false, error: error.message });
       }
     })();
-    return true;
+    return true; // Keep message port open for async response
   }
   
   if (message.type === 'GET_CAMERA_STATE') {
     // Return current camera state
     const isActive = cameraStream !== null && cameraStream.getTracks().some(track => track.readyState === 'live');
+    
+    // Send response back using sendResponse
     sendResponse({ isActive });
-    return true;
+    return true; // Keep message port open for response
   }
 });
 

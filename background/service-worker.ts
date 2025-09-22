@@ -435,41 +435,57 @@ class BackgroundService {
   }
 
   private async ensureOffscreenDocument(): Promise<void> {
+    console.log('🔍 Checking for existing offscreen document...');
     const existingContexts = await chrome.runtime.getContexts({});
+    console.log('📋 All existing contexts:', existingContexts);
+    
     const offscreenDocument = existingContexts.find(
       (context) => context.contextType === 'OFFSCREEN_DOCUMENT'
     );
     
     if (!offscreenDocument) {
-      console.log('📄 Creating offscreen document for camera access');
+      console.log('📄 No offscreen document found, creating new one...');
       await chrome.offscreen.createDocument({
         url: 'offscreen.html',
         reasons: [chrome.offscreen.Reason.USER_MEDIA],
         justification: 'Camera access for eye health monitoring'
       });
+      console.log('✅ Offscreen document created successfully');
+    } else {
+      console.log('✅ Offscreen document already exists:', offscreenDocument);
     }
   }
 
   private async forwardToOffscreenDocument(message: any, sendResponse: (response?: any) => void): Promise<void> {
+    console.log('🚀 forwardToOffscreenDocument called with message:', message);
+    
     try {
-      // Ensure offscreen document exists
+      console.log('📄 Ensuring offscreen document exists...');
       await this.ensureOffscreenDocument();
+      console.log('✅ Offscreen document ensured');
       
       // Wait a bit for offscreen document to be ready
+      console.log('⏳ Waiting 500ms for offscreen document to be ready...');
       await new Promise(resolve => setTimeout(resolve, 500));
+      console.log('✅ Wait completed, sending message to offscreen document');
       
       // Send message directly to offscreen document
+      console.log('📤 Sending message to offscreen document:', message);
       chrome.runtime.sendMessage(message, (response) => {
+        console.log('📥 Received response from offscreen document:', response);
+        console.log('🔍 Chrome runtime last error:', chrome.runtime.lastError);
+        
         if (chrome.runtime.lastError) {
-          console.error('Error communicating with offscreen document:', chrome.runtime.lastError);
+          console.error('❌ Error communicating with offscreen document:', chrome.runtime.lastError);
           sendResponse({ success: false, error: chrome.runtime.lastError.message });
         } else {
+          console.log('✅ Forwarding response back to popup:', response);
           sendResponse(response);
         }
       });
       
     } catch (error) {
-      console.error('Error in forwardToOffscreenDocument:', error);
+      console.error('❌ Error in forwardToOffscreenDocument:', error);
       sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
     }
   }

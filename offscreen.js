@@ -7,8 +7,92 @@ let videoElement = null;
 let canvas = null;
 let isProcessing = false;
 
+console.log('🎬 Offscreen document message listener registered');
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'REQUEST_CAMERA') {
+  console.log('📨 Offscreen document received message:', message, 'from sender:', sender);
+  
+  if (message.type === 'DOWNLOAD_FRAME') {
+    console.log('📸 Processing DOWNLOAD_FRAME message in offscreen document');
+    
+    // Handle async download frame request
+    (async () => {
+      try {
+        if (!videoElement || !canvas) {
+          sendResponse({ success: false, error: 'Camera not initialized' });
+          return;
+        }
+        
+        // Wait for video to be ready if it's not already
+        const waitForVideo = async () => {
+          return new Promise((resolve, reject) => {
+            const checkVideo = () => {
+              if (videoElement.readyState >= 2 && videoElement.currentTime > 0) {
+                resolve(true);
+              } else if (videoElement.readyState >= 2) {
+                // Video metadata is loaded, just need to wait for playback
+                setTimeout(checkVideo, 100);
+              } else {
+                // Video not ready, wait a bit more
+                setTimeout(checkVideo, 200);
+              }
+            };
+            
+            // Start checking immediately
+            checkVideo();
+            
+            // Timeout after 5 seconds
+            setTimeout(() => {
+              reject(new Error('Video failed to start playing within 5 seconds'));
+            }, 5000);
+          });
+        };
+        
+        // Wait for video to be ready
+        await waitForVideo();
+        
+        console.log(`📹 Video ready: readyState=${videoElement.readyState}, currentTime=${videoElement.currentTime}, dimensions=${videoElement.videoWidth}x${videoElement.videoHeight}`);
+        
+        // Capture current frame
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+      
+      // Convert canvas to blob
+      canvas.toBlob((blob) => {
+        if (blob) {
+          // Create download URL
+          const url = URL.createObjectURL(blob);
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const filename = `eyezen-frame-${timestamp}.png`;
+          
+          // Create download link and trigger download
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          
+          // Clean up
+          URL.revokeObjectURL(url);
+          // Note: Don't clear canvas here to avoid interfering with ongoing CV processing
+          
+          console.log('📸 Frame downloaded successfully:', filename);
+          sendResponse({ success: true, filename: filename });
+        } else {
+          sendResponse({ success: false, error: 'Failed to create image blob' });
+        }
+        }, 'image/png');
+        
+        return true; // Keep sendResponse alive for async operation
+      } catch (error) {
+        console.error('❌ Failed to download frame:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep message port open for async response
+  } else if (message.type === 'REQUEST_CAMERA') {
+    console.log('🎥 Processing REQUEST_CAMERA message in offscreen document');
     // Handle async camera request
     (async () => {
       try {
@@ -19,7 +103,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         globalThis.eyeZenCameraStream = cameraStream;
         
         // Initialize CV processing pipeline
-        console.log('🎥 Camera stream obtained, initializing CV processing...');
+        // console.log('🎥 Camera stream obtained, initializing CV processing...');
         await initializeCVProcessing(cameraStream);
         
         console.log('✅ Camera activated successfully in offscreen document with CV processing');
@@ -103,10 +187,19 @@ async function initializeCVProcessing(stream) {
     // Wait for video to be ready
     console.log('⏳ Waiting for video metadata...');
     await new Promise((resolve) => {
-      videoElement.onloadedmetadata = () => {
+      videoElement.onloadedmetadata = async () => {
         console.log(`📐 Video dimensions: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
         canvas.width = videoElement.videoWidth;
         canvas.height = videoElement.videoHeight;
+        
+        // Explicitly start playing the video
+        try {
+          await videoElement.play();
+          console.log('▶️ Video started playing successfully');
+        } catch (error) {
+          console.warn('⚠️ Video autoplay failed, but this is normal in some contexts:', error);
+        }
+        
         resolve();
       };
     });
@@ -163,7 +256,7 @@ function startFrameProcessing() {
     return;
   }
   
-  console.log('🎬 Starting frame processing loop at ~15 FPS...');
+  console.log('🎬 Starting frame processing loop every 3 minutes...');
   isProcessing = true;
   const ctx = canvas.getContext('2d');
   let frameCount = 0;
@@ -202,8 +295,8 @@ function startFrameProcessing() {
       console.error('❌ Frame processing error:', error);
     }
     
-    // Continue processing at ~15 FPS
-    setTimeout(processFrame, 67); // ~15 FPS (1000ms / 15 = 67ms)
+    // Continue processing every 3 minutes
+    setTimeout(processFrame, 180000); // 3 minutes (3 * 60 * 1000 = 180,000ms)
   }
   
   // Start the processing loop

@@ -353,6 +353,44 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       console.error('Failed to toggle camera:', error);
     }
   };
+
+  const downloadCurrentFrame = async () => {
+    try {
+      if (!state.cameraEnabled) {
+        alert('Camera must be enabled to capture frames');
+        return;
+      }
+
+      const response = await new Promise<{success: boolean; filename?: string; error?: string}>((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          { type: 'DOWNLOAD_FRAME' },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!response) {
+              reject(new Error('No response received from offscreen document'));
+              return;
+            }
+            resolve(response);
+          }
+        );
+      });
+
+      if (response.success) {
+        console.log('📸 Frame downloaded successfully:', response.filename);
+        // Show success feedback
+        alert(`Frame saved as: ${response.filename}`);
+      } else {
+        console.error('❌ Failed to download frame:', response.error);
+        alert(`Failed to download frame: ${response.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to download frame:', error);
+      alert('Failed to download frame. Please try again.');
+    }
+  };
   
   const stopCameraStream = async () => {
     try {
@@ -524,6 +562,11 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       // Show user instruction with better explanation of Chrome extension limitations
       const userConfirmed = confirm(
         '📹 Camera Permission Setup\n\n' +
+        '🔒 PRIVACY NOTICE:\n' +
+        '• No video is recorded or stored\n' +
+        '• Images are processed locally only\n' +
+        '• One-time analysis, then deleted\n' +
+        '• No data sent to external servers\n\n' +
         'Chrome extensions require camera permissions to be set to "Allow" for reliable access.\n\n' +
         'After clicking OK:\n' +
         '• A permission dialog may appear briefly\n' +
@@ -885,6 +928,15 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
                     className="text-xs text-blue-200 hover:text-white underline mt-1 transition-colors"
                   >
                     Need help? View setup guide
+                  </button>
+                )}
+                {state.cameraEnabled && (
+                  <button
+                    onClick={downloadCurrentFrame}
+                    className="text-xs text-blue-200 hover:text-white underline mt-1 transition-colors flex items-center space-x-1"
+                  >
+                    <span>📸</span>
+                    <span>Download Current Frame</span>
                   </button>
                 )}
               </div>

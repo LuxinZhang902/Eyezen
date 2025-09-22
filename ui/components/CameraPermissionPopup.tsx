@@ -164,8 +164,25 @@ For now, you can still use basic timer reminders.`;
             </div>
             <p className="text-gray-600 text-sm leading-relaxed">
               EyeZen uses your camera to detect eye fatigue and provide personalized break recommendations. 
-              Your privacy is protected - no video is recorded or transmitted.
+              <strong>Your privacy is protected</strong> - no video is recorded or transmitted, and images are only used for one-time analysis.
             </p>
+
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-2">
+              <div className="flex items-start space-x-2">
+                <svg className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="text-xs font-medium text-green-800">Privacy Guarantee</p>
+                  <p className="text-xs text-green-700 mt-1">
+                    • No video recording or storage<br/>
+                    • Images processed locally only<br/>
+                    • One-time analysis, then deleted<br/>
+                    • No data sent to external servers
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">

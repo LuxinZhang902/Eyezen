@@ -30,6 +30,7 @@ export declare enum ChromeMessageType {
     CLEAR_NOTIFICATION = "clear_notification",
     REQUEST_CAMERA = "request_camera",
     CAMERA_STATUS = "camera_status",
+    DOWNLOAD_FRAME = "download_frame",
     GENERATE_SCRIPT = "generate_script",
     GENERATE_SUMMARY = "generate_summary",
     TRANSLATE_TEXT = "translate_text"

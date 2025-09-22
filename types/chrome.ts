@@ -47,6 +47,7 @@ export enum ChromeMessageType {
   // Camera and permissions
   REQUEST_CAMERA = 'request_camera',
   CAMERA_STATUS = 'camera_status',
+  DOWNLOAD_FRAME = 'download_frame',
   
   // API calls
   GENERATE_SCRIPT = 'generate_script',

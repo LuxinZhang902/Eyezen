@@ -49,7 +49,10 @@ class CVWorker {
    */
   private async handleMessage(event: MessageEvent<WorkerMessage>): Promise<void> {
     const { type, data } = event.data;
-    console.log('🔧 CV Worker received message:', type, data ? 'with data' : 'no data');
+    // Only log non-process messages to reduce console noise
+    if (type !== 'process') {
+      console.log('🔧 CV Worker received message:', type, data ? 'with data' : 'no data');
+    }
 
     try {
       switch (type) {
@@ -84,25 +87,9 @@ class CVWorker {
       // Load MediaPipe scripts dynamically
       await this.loadMediaPipeScripts();
       
-      // Initialize MediaPipe FilesetResolver with local WASM files
-      const vision = await FilesetResolver.forVisionTasks(
-        '/assets/wasm'
-      );
-
-      // Create Face Landmarker
-      this.faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: config.modelPath || '/assets/wasm/face_landmarker.task',
-          delegate: 'CPU' // Use CPU for better compatibility
-        },
-        runningMode: 'VIDEO',
-        numFaces: 1,
-        minFaceDetectionConfidence: 0.5,
-        minFacePresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-        outputFaceBlendshapes: false,
-        outputFacialTransformationMatrixes: false
-      });
+      // MediaPipe is now initialized through the worker loader
+      // Set a flag to indicate we're ready to process
+      this.faceLandmarker = { initialized: true };
 
       console.log('✅ CV Worker: MediaPipe Face Landmarker initialized successfully');
       this.postMessage({
@@ -129,7 +116,10 @@ class CVWorker {
         importScripts('/assets/mediapipe-worker-loader.js');
         
         // Initialize MediaPipe using the worker loader
-        await (globalThis as any).MediaPipeWorkerLoader.loadVisionTasks();
+        const { initializeMediaPipe, detectForVideo } = await (globalThis as any).MediaPipeWorkerLoader.loadVisionTasks();
+        
+        // Store the detection function globally for use in processFrame
+        (globalThis as any).detectForVideo = detectForVideo;
         
         console.log('✅ CV Worker: MediaPipe scripts loaded successfully');
         resolve();
@@ -163,17 +153,15 @@ class CVWorker {
       
       this.frameCount++;
       
-      if (this.frameCount % 30 === 0) { // Log every 30 frames (~2 seconds)
-        console.log(`📊 CV Worker: Processing frame ${this.frameCount}, FPS: ${(1000 / this.frameInterval).toFixed(1)}`);
-      }
+      // Removed frequent frame processing logs to reduce console noise
       
       // Create HTMLCanvasElement from ImageData for MediaPipe
       const canvas = new OffscreenCanvas(imageData.width, imageData.height);
-      const ctx = canvas.getContext('2d')!;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
       ctx.putImageData(imageData, 0, 0);
 
-      // Process frame with MediaPipe
-      const results = await this.faceLandmarker.detectForVideo(
+      // Process frame with MediaPipe using the global detection function
+      const results = await (globalThis as any).detectForVideo(
         canvas as any,
         timestamp
       );
@@ -182,19 +170,22 @@ class CVWorker {
       if (results.faceLandmarks && results.faceLandmarks.length > 0) {
         const metrics = this.extractMetrics(results.faceLandmarks[0], timestamp);
         
-        console.log('👁️ CV Worker: Eye metrics calculated:', {
-          blinkRate: metrics.blinkRate,
-          fatigueIndex: metrics.fatigueIndex,
-          earValue: metrics.earValue,
-          perclosValue: metrics.perclosValue
-        });
+        // Only log eye metrics occasionally to reduce console noise
+        if (this.frameCount % 150 === 0) { // Log every 10 seconds
+          console.log('👁️ CV Worker: Eye metrics calculated:', {
+            blinkRate: metrics.blinkRate,
+            fatigueIndex: metrics.fatigueIndex,
+            earValue: metrics.earValue,
+            perclosValue: metrics.perclosValue
+          });
+        }
         
         this.postMessage({
           type: 'metrics',
           data: metrics
         });
       } else {
-        if (this.frameCount % 60 === 0) { // Log every 60 frames when no face detected
+        if (this.frameCount % 300 === 0) { // Log every 20 seconds when no face detected
           console.log('👤 CV Worker: No face detected in frame');
         }
       }

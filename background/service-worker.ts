@@ -82,12 +82,15 @@ class BackgroundService {
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
   ): Promise<boolean> {
-    console.log('🔄 Service Worker received message:', message.type || message.action, 'from:', sender.tab?.url || 'extension');
+    // Only log non-camera messages to reduce console noise
+    if (message.type !== 'REQUEST_CAMERA' && message.type !== 'STOP_CAMERA' && message.type !== 'GET_CAMERA_STATE') {
+      console.log('🔄 Service Worker received message:', message.type || message.action, 'from:', sender.tab?.url || 'extension');
+    }
     
     try {
       // Handle camera-related messages by forwarding to offscreen document
       if (message.type === 'REQUEST_CAMERA' || message.type === 'STOP_CAMERA' || message.type === 'GET_CAMERA_STATE') {
-        console.log('📹 Service Worker: Forwarding camera message to offscreen document:', message.type);
+        // Reduced logging for frequent camera messages
         this.forwardToOffscreenDocument(message, sendResponse);
         return true; // Keep message port open for async response
       }

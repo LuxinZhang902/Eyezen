@@ -10,7 +10,7 @@ let isProcessing = false;
 console.log('🎬 Offscreen document message listener registered');
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('📨 Offscreen document received message:', message, 'from sender:', sender);
+  // Handle incoming messages without logging every single one
   
   if (message.type === 'DOWNLOAD_FRAME') {
     console.log('📸 Processing DOWNLOAD_FRAME message in offscreen document');
@@ -54,7 +54,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log(`📹 Video ready: readyState=${videoElement.readyState}, currentTime=${videoElement.currentTime}, dimensions=${videoElement.videoWidth}x${videoElement.videoHeight}`);
         
         // Capture current frame
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
       
       // Convert canvas to blob
@@ -182,7 +182,7 @@ async function initializeCVProcessing(stream) {
     // Create canvas for frame extraction
     console.log('🎨 Creating canvas for frame extraction...');
     canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     
     // Wait for video to be ready
     console.log('⏳ Waiting for video metadata...');
@@ -256,9 +256,9 @@ function startFrameProcessing() {
     return;
   }
   
-  console.log('🎬 Starting frame processing loop every 3 minutes...');
+  console.log('🎬 Starting real-time frame processing at ~15 FPS...');
   isProcessing = true;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   let frameCount = 0;
   
   function processFrame() {
@@ -275,9 +275,7 @@ function startFrameProcessing() {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       
       frameCount++;
-      if (frameCount % 15 === 0) { // Log every second
-        console.log(`🎞️ Processing frame ${frameCount} (${canvas.width}x${canvas.height})`);
-      }
+      // Removed frequent frame processing logs to reduce console noise
       
       // Send frame to CV worker for processing
       cvWorker.postMessage({
@@ -295,8 +293,8 @@ function startFrameProcessing() {
       console.error('❌ Frame processing error:', error);
     }
     
-    // Continue processing every 3 minutes
-    setTimeout(processFrame, 180000); // 3 minutes (3 * 60 * 1000 = 180,000ms)
+    // Continue processing at 15 FPS (every ~67ms)
+    setTimeout(processFrame, 67); // ~15 FPS for real-time face detection
   }
   
   // Start the processing loop
@@ -319,7 +317,7 @@ async function stopCVProcessing() {
   }
   
   if (canvas) {
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     canvas = null;
   }

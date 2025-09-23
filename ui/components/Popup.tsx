@@ -3,7 +3,7 @@
  * Main popup interface for the EyeZen Chrome Extension
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { UserStatus, EyeScore, BreakType, PostureStatus, EyeMetrics } from '../../types/index';
 import { ChromeStorageService } from '../../core/storage/index';
 import { ChromeAIService } from '../../core/api/openai-service';
@@ -36,6 +36,7 @@ interface PopupState {
 }
 
 const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProps) => {
+  const lastLogTimeRef = useRef<number>(0);
   const [state, setState] = useState<PopupState>({
     status: UserStatus.GOOD,
     eyeScore: {
@@ -190,8 +191,12 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
   // Handle eye metrics from CV worker
   const handleEyeMetrics = async (eyeMetrics: any) => {
     try {
-      console.log('👤 Face detected! Received eye metrics:', eyeMetrics);
-      console.log('📊 Real-time fatigue index:', eyeMetrics.fatigueIndex, 'Blink rate:', eyeMetrics.blinkRate);
+      // Only log face detection occasionally to reduce console noise
+        if (Date.now() - lastLogTimeRef.current > 10000) { // Log every 10 seconds
+          console.log('👤 Face detected! Received eye metrics:', eyeMetrics);
+          console.log('📊 Real-time fatigue index:', eyeMetrics.fatigueIndex, 'Blink rate:', eyeMetrics.blinkRate);
+          lastLogTimeRef.current = Date.now();
+        }
       
       // Create properly structured EyeMetrics object
       const metricsData = {

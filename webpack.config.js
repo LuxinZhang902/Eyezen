@@ -91,18 +91,17 @@ module.exports = (env, argv) => {
             noErrorOnMissing: true
           },
           {
-            from: 'node_modules/@mediapipe/tasks-vision/wasm',
+            from: path.resolve(__dirname, 'assets/wasm'),
             to: 'assets/wasm',
-            noErrorOnMissing: true
-          },
-          {
-            from: 'node_modules/@mediapipe/tasks-vision/vision_bundle.mjs',
-            to: 'assets/vision_bundle.mjs',
             noErrorOnMissing: true
           },
           {
             from: path.resolve(__dirname, 'assets/mediapipe-worker-loader.js'),
             to: 'assets/mediapipe-worker-loader.js'
+          },
+          {
+            from: path.resolve(__dirname, 'assets/vision_bundle.js'),
+            to: 'assets/vision_bundle.js'
           }
         ]
       })

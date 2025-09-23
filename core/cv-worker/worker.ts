@@ -229,17 +229,21 @@ class CVWorker {
 
       // Calculate EAR (Eye Aspect Ratio)
       const earValue = EARCalculator.calculateAverageEAR(leftEyeLandmarks, rightEyeLandmarks);
+      console.log('👁️ Raw EAR Value:', earValue.toFixed(3));
 
       // Calculate PERCLOS (Percentage of Eye Closure)
       const perclosValue = this.perclosCalculator.addEARValue(earValue);
+      console.log('😴 PERCLOS Value:', perclosValue.toFixed(3), '%');
 
       // Detect blinks
       const isBlinking = this.blinkDetector.processEAR(earValue, timestamp);
       const blinkRate = this.blinkDetector.getBlinkRate();
+      console.log('👀 Blink Detection - Is Blinking:', isBlinking, 'Rate:', blinkRate.toFixed(1), 'bpm');
 
       // Estimate head pose
       const headPose = HeadPoseEstimator.estimatePose(faceLandmarks);
       const posture = HeadPoseEstimator.classifyPosture(headPose);
+      console.log('🧍 Head Pose:', headPose, 'Posture:', posture);
 
       // Calculate fatigue index (0-100 scale)
       const fatigueIndex = this.calculateFatigueIndex({
@@ -268,12 +272,18 @@ class CVWorker {
    * Extract eye landmarks for a specific eye
    */
   private getEyeLandmarks(faceLandmarks: any[], eye: 'left' | 'right'): any[] {
-    // MediaPipe Face Landmarker eye indices
-    const leftEyeIndices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
-    const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
+    // MediaPipe Face Landmarker 6-point eye model for EAR calculation
+    // Format: [outer_corner, top_1, top_2, inner_corner, bottom_2, bottom_1]
+    const leftEyeIndices = [33, 159, 158, 133, 153, 144];  // Left eye 6 points
+    const rightEyeIndices = [362, 386, 385, 263, 374, 373]; // Right eye 6 points
     
     const indices = eye === 'left' ? leftEyeIndices : rightEyeIndices;
-    return indices.map(index => faceLandmarks[index]).filter(Boolean);
+    const landmarks = indices.map(index => faceLandmarks[index]).filter(Boolean);
+    
+    console.log(`👁️ ${eye} eye landmarks (${landmarks.length} points):`, 
+      landmarks.map((l, i) => `${indices[i]}: (${l.x.toFixed(3)}, ${l.y.toFixed(3)})`))
+    
+    return landmarks;
   }
 
   /**
@@ -287,6 +297,13 @@ class CVWorker {
   }): number {
     const { ear, perclos, blinkRate, posture } = metrics;
     
+    console.log('🔍 Fatigue Calculation Input:', {
+      ear: ear.toFixed(3),
+      perclos: perclos.toFixed(3),
+      blinkRate: blinkRate.toFixed(1),
+      posture
+    });
+    
     // Normalize metrics to 0-100 scale
     let fatigueScore = 0;
     
@@ -294,24 +311,31 @@ class CVWorker {
     const normalEAR = 0.3; // Typical EAR for alert state
     const earScore = Math.max(0, (normalEAR - ear) / normalEAR * 40);
     fatigueScore += earScore;
+    console.log('📊 EAR Score:', earScore.toFixed(1), '(EAR:', ear.toFixed(3), 'vs normal:', normalEAR, ')');
     
     // PERCLOS contribution (higher PERCLOS = more fatigue)
     const perclosScore = Math.min(40, perclos * 2); // Cap at 40 points
     fatigueScore += perclosScore;
+    console.log('📊 PERCLOS Score:', perclosScore.toFixed(1), '(PERCLOS:', perclos.toFixed(3), '%)');
     
     // Blink rate contribution
     const normalBlinkRate = 15; // Normal blinks per minute
     const blinkRateDeviation = Math.abs(blinkRate - normalBlinkRate);
     const blinkScore = Math.min(10, blinkRateDeviation / 2);
     fatigueScore += blinkScore;
+    console.log('📊 Blink Score:', blinkScore.toFixed(1), '(Rate:', blinkRate.toFixed(1), 'vs normal:', normalBlinkRate, ')');
     
     // Posture contribution
     const postureScore = posture === PostureStatus.GOOD ? 0 : 
                         posture === PostureStatus.FORWARD ? 8 :
                         posture === PostureStatus.TILTED ? 5 : 10;
     fatigueScore += postureScore;
+    console.log('📊 Posture Score:', postureScore, '(Status:', posture, ')');
     
-    return Math.min(100, Math.max(0, fatigueScore));
+    const finalScore = Math.min(100, Math.max(0, fatigueScore));
+    console.log('🎯 Final Fatigue Index:', finalScore.toFixed(1), '/ 100');
+    
+    return finalScore;
   }
 
   /**

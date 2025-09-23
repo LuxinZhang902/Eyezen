@@ -6,6 +6,7 @@ let cvWorker = null;
 let videoElement = null;
 let canvas = null;
 let isProcessing = false;
+let frameCount = 0;
 
 console.log('🎬 Offscreen document message listener registered');
 
@@ -277,8 +278,10 @@ function startFrameProcessing() {
         return;
       }
       
-      detectionCount++;
-      console.log(`🔍 Running face detection #${detectionCount} at video time: ${videoElement.currentTime.toFixed(2)}s`);
+      frameCount++;
+      if (frameCount % 5 === 0) { // Log every 5 minutes at 1-minute intervals
+        console.log(`🔍 Detection active - Frame ${frameCount} processed (1-minute intervals)`);
+      }
       
       // Draw current video frame to canvas
       ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
@@ -302,8 +305,8 @@ function startFrameProcessing() {
       console.error('❌ Frame processing error:', error);
     }
     
-    // Schedule next detection in 2 minutes (120000ms)
-    setTimeout(processFrame, 120000);
+    // Schedule next detection for real-time processing (~15 FPS)
+    setTimeout(processFrame, 60000); // 1 minute interval
   }
   
   // Start the first detection immediately

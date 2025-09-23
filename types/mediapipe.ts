@@ -186,12 +186,14 @@ export class PERCLOSCalculator {
 
 // Blink detection utilities
 export class BlinkDetector {
-  private earHistory: number[] = [];
-  private blinkCount: number = 0;
-  private lastBlinkTime: number = 0;
+  private earHistory: { value: number; timestamp: number }[] = [];
+  private blinkTimestamps: number[] = [];
+  private startTime: number = 0;
   private readonly blinkThreshold: number;
   private readonly minBlinkDuration: number;
   private readonly maxBlinkDuration: number;
+  private isInBlink: boolean = false;
+  private blinkStartTime: number = 0;
 
   constructor(
     blinkThreshold: number = 0.2,
@@ -201,23 +203,29 @@ export class BlinkDetector {
     this.blinkThreshold = blinkThreshold;
     this.minBlinkDuration = minBlinkDuration;
     this.maxBlinkDuration = maxBlinkDuration;
+    this.startTime = Date.now();
   }
 
   /**
    * Process new EAR value and detect blinks
    */
   processEAR(ear: number, timestamp: number): boolean {
-    this.earHistory.push(ear);
+    this.earHistory.push({ value: ear, timestamp });
     
-    // Keep only recent history for blink detection
-    if (this.earHistory.length > 10) {
-      this.earHistory.shift();
-    }
+    // Keep only recent history (last 2 seconds)
+    const cutoffTime = timestamp - 2000;
+    this.earHistory = this.earHistory.filter(entry => entry.timestamp > cutoffTime);
+    
+    // Clean old blink timestamps (keep only last minute)
+    const oneMinuteAgo = timestamp - 60000;
+    this.blinkTimestamps = this.blinkTimestamps.filter(t => t > oneMinuteAgo);
 
-    // Detect blink pattern: high -> low -> high
-    if (this.detectBlinkPattern(timestamp)) {
-      this.blinkCount++;
-      this.lastBlinkTime = timestamp;
+    // Detect blink state changes
+    const blinkDetected = this.detectBlinkTransition(ear, timestamp);
+    
+    if (blinkDetected) {
+      this.blinkTimestamps.push(timestamp);
+      console.log('🔍 Blink detected! Total blinks in last minute:', this.blinkTimestamps.length);
       return true;
     }
 
@@ -229,11 +237,22 @@ export class BlinkDetector {
    */
   getBlinkRate(timeWindowMs: number = 60000): number {
     const currentTime = Date.now();
-    const timeElapsed = Math.min(timeWindowMs, currentTime - this.lastBlinkTime);
+    const windowStart = currentTime - timeWindowMs;
     
-    if (timeElapsed === 0) return 0;
+    // Count blinks in the time window
+    const blinksInWindow = this.blinkTimestamps.filter(t => t > windowStart).length;
     
-    return (this.blinkCount / timeElapsed) * 60000; // Convert to per minute
+    // Calculate elapsed time since start or window size, whichever is smaller
+    const elapsedTime = Math.min(timeWindowMs, currentTime - this.startTime);
+    
+    if (elapsedTime < 1000) return 0; // Need at least 1 second of data
+    
+    // Convert to blinks per minute
+    const blinkRate = (blinksInWindow / elapsedTime) * 60000;
+    
+    console.log(`📊 Blink rate calculation: ${blinksInWindow} blinks in ${(elapsedTime/1000).toFixed(1)}s = ${blinkRate.toFixed(1)} bpm`);
+    
+    return blinkRate;
   }
 
   /**
@@ -241,22 +260,30 @@ export class BlinkDetector {
    */
   reset(): void {
     this.earHistory = [];
-    this.blinkCount = 0;
-    this.lastBlinkTime = Date.now();
+    this.blinkTimestamps = [];
+    this.startTime = Date.now();
+    this.isInBlink = false;
+    this.blinkStartTime = 0;
   }
 
-  private detectBlinkPattern(timestamp: number): boolean {
-    if (this.earHistory.length < 3) return false;
-
-    const recent = this.earHistory.slice(-3);
-    const [prev, current, next] = recent;
-
-    // Simple blink detection: EAR drops below threshold then rises
-    return (
-      prev > this.blinkThreshold &&
-      current <= this.blinkThreshold &&
-      (next === undefined || next > this.blinkThreshold)
-    );
+  private detectBlinkTransition(ear: number, timestamp: number): boolean {
+    if (!this.isInBlink && ear <= this.blinkThreshold) {
+      // Start of blink
+      this.isInBlink = true;
+      this.blinkStartTime = timestamp;
+      return false; // Don't count as complete blink yet
+    } else if (this.isInBlink && ear > this.blinkThreshold) {
+      // End of blink
+      this.isInBlink = false;
+      const blinkDuration = timestamp - this.blinkStartTime;
+      
+      // Validate blink duration
+      if (blinkDuration >= this.minBlinkDuration && blinkDuration <= this.maxBlinkDuration) {
+        return true; // Valid blink detected
+      }
+    }
+    
+    return false;
   }
 }
 

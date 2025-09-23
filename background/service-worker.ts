@@ -95,6 +95,17 @@ class BackgroundService {
         return true; // Keep message port open for async response
       }
       
+      // Handle EYE_METRICS messages from offscreen document - forward to popup
+      if (message.type === 'EYE_METRICS') {
+        console.log('👁️ Service Worker: Forwarding eye metrics to popup');
+        // Forward to all extension contexts (popup, options page, etc.)
+        chrome.runtime.sendMessage(message).catch(() => {
+          // Ignore errors if no listeners (popup might be closed)
+        });
+        sendResponse({ success: true });
+        return false;
+      }
+      
       // Handle regular service worker actions
       switch (message.action) {
         case 'START_BREAK':

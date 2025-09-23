@@ -106,11 +106,13 @@ export declare class PERCLOSCalculator {
 }
 export declare class BlinkDetector {
     private earHistory;
-    private blinkCount;
-    private lastBlinkTime;
+    private blinkTimestamps;
+    private startTime;
     private readonly blinkThreshold;
     private readonly minBlinkDuration;
     private readonly maxBlinkDuration;
+    private isInBlink;
+    private blinkStartTime;
     constructor(blinkThreshold?: number, minBlinkDuration?: number, // ms
     maxBlinkDuration?: number);
     /**
@@ -125,7 +127,7 @@ export declare class BlinkDetector {
      * Reset blink counter
      */
     reset(): void;
-    private detectBlinkPattern;
+    private detectBlinkTransition;
 }
 export declare class HeadPoseEstimator {
     /**

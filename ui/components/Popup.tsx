@@ -20,6 +20,7 @@ interface PopupProps {
 interface PopupState {
   status: UserStatus;
   eyeScore: EyeScore;
+  realtimeScore: number; // Real-time fatigue score (0-100)
   isLoading: boolean;
   cameraEnabled: boolean;
   lastBreakTime: number | null;
@@ -43,6 +44,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       weekly: 50,
       trend: 'stable'
     },
+    realtimeScore: 85, // Start with a default score to show the component
     isLoading: true,
     cameraEnabled: true,
     lastBreakTime: null,
@@ -188,7 +190,8 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
   // Handle eye metrics from CV worker
   const handleEyeMetrics = async (eyeMetrics: any) => {
     try {
-      console.log('Received eye metrics:', eyeMetrics);
+      console.log('👤 Face detected! Received eye metrics:', eyeMetrics);
+      console.log('📊 Real-time fatigue index:', eyeMetrics.fatigueIndex, 'Blink rate:', eyeMetrics.blinkRate);
       
       // Create properly structured EyeMetrics object
       const metricsData = {
@@ -205,6 +208,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       
       // Update UI state with new metrics
       const newScore = Math.max(0, Math.min(100, 100 - (eyeMetrics.fatigueIndex * 100)));
+      const realtimeFatigueScore = Math.max(0, Math.min(100, 100 - (eyeMetrics.fatigueIndex * 100)));
       const newStatus = determineUserStatus(newScore, [eyeMetrics]);
       
       setState(prev => ({
@@ -213,8 +217,11 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
         eyeScore: {
           ...prev.eyeScore,
           current: Math.round(newScore)
-        }
+        },
+        realtimeScore: Math.round(realtimeFatigueScore)
       }));
+      
+      console.log('Updated realtimeScore:', Math.round(realtimeFatigueScore));
       
       // Generate AI recommendation based on current metrics
       if (eyeMetrics.fatigueIndex > 0.7) {
@@ -418,7 +425,8 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       setState(prev => ({
         ...prev,
         cameraEnabled: false,
-        showCameraPermissionPopup: false
+        showCameraPermissionPopup: false,
+        realtimeScore: 0 // Reset real-time score when camera is disabled
       }));
       
       console.log('Camera deactivated');
@@ -448,7 +456,8 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
         setState(prev => ({
           ...prev,
           cameraEnabled: false,
-          showCameraPermissionPopup: false
+          showCameraPermissionPopup: false,
+          realtimeScore: 0 // Reset real-time score when permission is revoked
         }));
         
         // Stop any active camera stream in offscreen document
@@ -870,9 +879,10 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
         onLogin={handleLogin}
         onSignup={handleSignup}
       />
-      <div className="w-[380px] h-[550px] bg-white overflow-hidden flex flex-col">
+      <div className="w-[380px] h-[550px] bg-white overflow-hidden flex flex-col relative">
       {/* Header */}
       <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4">
+        
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-3">
             <div className="text-2xl">👁️</div>
@@ -958,9 +968,20 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
       </div>
 
       {/* Simplified Status */}
-      <div className="p-3">
+      <div className="p-3 relative">
+        {/* Real-time Score Display - Upper Left in White Space */}
+        <div className="absolute top-3 left-3 z-10">
+          <div className="inline-flex items-center px-2 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs shadow-sm">
+            <div className="w-2 h-2 bg-blue-500 rounded-full mr-1.5 animate-pulse"></div>
+            <span className="font-medium text-blue-700">
+              {state.realtimeScore >= 0 ? state.realtimeScore : '--'}
+            </span>
+          </div>
+        </div>
         <div className="text-center mb-3">
           <div className="text-3xl mb-1">{getStatusIcon(state.status)}</div>
+          
+          {/* Eye Health Score */}
           <h2 className={`text-base font-bold ${getScoreColor(state.eyeScore.current)}`}>
             Eye Health: {state.eyeScore.current}/100
           </h2>

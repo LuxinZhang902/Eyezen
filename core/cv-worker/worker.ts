@@ -154,24 +154,13 @@ class CVWorker {
       return;
     }
 
-    const currentTime = performance.now();
-    
-    // Throttle processing to target FPS
-    if (currentTime - this.lastFrameTime < this.frameInterval) {
-      console.log('🕐 CV Worker: Throttling frame - time diff:', currentTime - this.lastFrameTime, 'required:', this.frameInterval);
-      return;
-    }
-
     try {
       const { imageData, timestamp } = frameData;
       
       this.frameCount++;
       
-      // Log frame processing every 30 frames
-      if (this.frameCount % 30 === 0) {
-        console.log(`🔍 CV Worker: Processing frame ${this.frameCount}, checking for detectForVideo function`);
-        console.log('🔍 CV Worker: detectForVideo available?', typeof (globalThis as any).detectForVideo);
-      }
+      console.log(`🔍 CV Worker: Processing detection frame ${this.frameCount} at timestamp ${timestamp}`);
+      console.log('🔍 CV Worker: detectForVideo available?', typeof (globalThis as any).detectForVideo);
       
       // Create HTMLCanvasElement from ImageData for MediaPipe
       const canvas = new OffscreenCanvas(imageData.width, imageData.height);
@@ -220,7 +209,7 @@ class CVWorker {
       // Clean up canvas immediately
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
-      this.lastFrameTime = currentTime;
+      this.lastFrameTime = performance.now();
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

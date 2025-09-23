@@ -258,10 +258,10 @@ function startFrameProcessing() {
     return;
   }
   
-  console.log('🎬 Starting real-time frame processing at ~15 FPS...');
+  console.log('🎬 Starting timer-based frame processing every 2 minutes...');
   isProcessing = true;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  let frameCount = 0;
+  let detectionCount = 0;
   
   function processFrame() {
     if (!isProcessing || !videoElement || videoElement.paused || videoElement.ended) {
@@ -272,24 +272,19 @@ function startFrameProcessing() {
     try {
       // Check if video is actually playing
       if (videoElement.readyState < 2) {
-        console.log('⚠️ Video not ready yet, skipping frame');
-        setTimeout(processFrame, 66); // ~15 FPS
+        console.log('⚠️ Video not ready yet, skipping detection');
+        setTimeout(processFrame, 120000); // Try again in 2 minutes
         return;
       }
+      
+      detectionCount++;
+      console.log(`🔍 Running face detection #${detectionCount} at video time: ${videoElement.currentTime.toFixed(2)}s`);
       
       // Draw current video frame to canvas
       ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
       
       // Get image data from canvas
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      
-      frameCount++;
-      
-      // Log every 30th frame to monitor processing
-      if (frameCount % 30 === 0) {
-        console.log(`🎬 Processing frame ${frameCount}, video time: ${videoElement.currentTime.toFixed(2)}s`);
-        console.log('🔍 Sending frame to CV worker, worker available?', !!cvWorker);
-      }
       
       // Send frame to CV worker for processing
       cvWorker.postMessage({
@@ -307,11 +302,11 @@ function startFrameProcessing() {
       console.error('❌ Frame processing error:', error);
     }
     
-    // Continue processing at 15 FPS (every ~67ms)
-    setTimeout(processFrame, 67); // ~15 FPS for real-time face detection
+    // Schedule next detection in 2 minutes (120000ms)
+    setTimeout(processFrame, 120000);
   }
   
-  // Start the processing loop
+  // Start the first detection immediately
   processFrame();
 }
 

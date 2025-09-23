@@ -43,15 +43,15 @@ async function initializeMediaPipe() {
     // Create FaceLandmarker
     faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
       baseOptions: {
-        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+        modelAssetPath: './assets/wasm/face_landmarker.task',
         delegate: 'GPU'
       },
       outputFaceBlendshapes: true,
       runningMode: 'VIDEO',
       numFaces: 1,
-      minFaceDetectionConfidence: 0.5,
-      minFacePresenceConfidence: 0.5,
-      minTrackingConfidence: 0.5
+      minFaceDetectionConfidence: 0.3,
+      minFacePresenceConfidence: 0.3,
+      minTrackingConfidence: 0.3
     });
     
     isInitialized = true;
@@ -73,15 +73,23 @@ function detectForVideo(imageData, timestamp) {
   }
   
   try {
+    console.log('🔍 Processing frame for face detection:', {
+      imageWidth: imageData.width,
+      imageHeight: imageData.height,
+      timestamp: timestamp
+    });
+    
     // Use real MediaPipe detection
     const results = faceLandmarker.detectForVideo(imageData, timestamp);
     
-    // Log successful detection
+    // Log detection results
     if (results.faceLandmarks && results.faceLandmarks.length > 0) {
       console.log('👤 Face detected! Received eye metrics:', {
         facesDetected: results.faceLandmarks.length,
         landmarksCount: results.faceLandmarks[0].length
       });
+    } else {
+      console.log('❌ No face detected in frame');
     }
     
     return results;

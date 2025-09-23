@@ -216,6 +216,8 @@ async function initializeCVProcessing(stream) {
       switch (type) {
         case 'ready':
           console.log('CV Worker initialized:', data.message);
+          // Tell the worker to start processing
+          cvWorker.postMessage({ type: 'start' });
           startFrameProcessing();
           break;
         case 'metrics':
@@ -268,6 +270,13 @@ function startFrameProcessing() {
     }
     
     try {
+      // Check if video is actually playing
+      if (videoElement.readyState < 2) {
+        console.log('⚠️ Video not ready yet, skipping frame');
+        setTimeout(processFrame, 66); // ~15 FPS
+        return;
+      }
+      
       // Draw current video frame to canvas
       ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
       
@@ -275,7 +284,12 @@ function startFrameProcessing() {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       
       frameCount++;
-      // Removed frequent frame processing logs to reduce console noise
+      
+      // Log every 30th frame to monitor processing
+      if (frameCount % 30 === 0) {
+        console.log(`🎬 Processing frame ${frameCount}, video time: ${videoElement.currentTime.toFixed(2)}s`);
+        console.log('🔍 Sending frame to CV worker, worker available?', !!cvWorker);
+      }
       
       // Send frame to CV worker for processing
       cvWorker.postMessage({

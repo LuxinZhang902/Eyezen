@@ -17,7 +17,7 @@ import { EyeMetrics, PostureStatus } from '../../types/index';
 
 // Worker message types
 interface WorkerMessage {
-  type: 'init' | 'process' | 'stop' | 'cleanup';
+  type: 'init' | 'start' | 'process' | 'stop' | 'cleanup';
   data?: any;
 }
 
@@ -49,6 +49,9 @@ class CVWorker {
    */
   private async handleMessage(event: MessageEvent<WorkerMessage>): Promise<void> {
     const { type, data } = event.data;
+    
+    console.log(`📨 CV Worker: Received ${type} message`, data ? 'with data' : 'without data');
+    
     // Only log non-process messages to reduce console noise
     if (type !== 'process') {
       console.log('🔧 CV Worker received message:', type, data ? 'with data' : 'no data');
@@ -59,8 +62,17 @@ class CVWorker {
         case 'init':
           await this.initialize(data);
           break;
+        case 'start':
+          console.log('🚀 CV Worker: Starting processing');
+          this.startProcessing();
+          break;
         case 'process':
-          await this.processFrame(data);
+          if (data) {
+            console.log('🎯 CV Worker: Processing frame message received');
+            await this.processFrame(data);
+          } else {
+            console.warn('⚠️ CV Worker: Process message received without data');
+          }
           break;
         case 'stop':
           this.stopProcessing();
@@ -113,7 +125,7 @@ class CVWorker {
         console.log('📦 CV Worker: Loading MediaPipe scripts...');
         
         // Load MediaPipe worker loader from local assets
-        importScripts('/assets/mediapipe-worker-loader.js');
+        importScripts('./assets/mediapipe-worker-loader.js');
         
         // Initialize MediaPipe using the worker loader
         const { initializeMediaPipe, detectForVideo } = await (globalThis as any).MediaPipeWorkerLoader.loadVisionTasks();
@@ -138,6 +150,7 @@ class CVWorker {
     timestamp: number;
   }): Promise<void> {
     if (!this.faceLandmarker || !this.isProcessing) {
+      console.log('🚫 CV Worker: Skipping frame - faceLandmarker:', !!this.faceLandmarker, 'isProcessing:', this.isProcessing);
       return;
     }
 
@@ -145,6 +158,7 @@ class CVWorker {
     
     // Throttle processing to target FPS
     if (currentTime - this.lastFrameTime < this.frameInterval) {
+      console.log('🕐 CV Worker: Throttling frame - time diff:', currentTime - this.lastFrameTime, 'required:', this.frameInterval);
       return;
     }
 
@@ -153,21 +167,34 @@ class CVWorker {
       
       this.frameCount++;
       
-      // Removed frequent frame processing logs to reduce console noise
+      // Log frame processing every 30 frames
+      if (this.frameCount % 30 === 0) {
+        console.log(`🔍 CV Worker: Processing frame ${this.frameCount}, checking for detectForVideo function`);
+        console.log('🔍 CV Worker: detectForVideo available?', typeof (globalThis as any).detectForVideo);
+      }
       
       // Create HTMLCanvasElement from ImageData for MediaPipe
       const canvas = new OffscreenCanvas(imageData.width, imageData.height);
       const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
       ctx.putImageData(imageData, 0, 0);
 
+      // Check if detection function is available
+      if (typeof (globalThis as any).detectForVideo !== 'function') {
+        console.error('❌ CV Worker: detectForVideo function not available in worker context');
+        return;
+      }
+
       // Process frame with MediaPipe using the global detection function
+      console.log('🎯 CV Worker: Calling detectForVideo with canvas:', canvas.width, 'x', canvas.height);
       const results = await (globalThis as any).detectForVideo(
         canvas as any,
         timestamp
       );
+      
+      console.log('🎯 CV Worker: detectForVideo returned:', results);
 
       // Extract metrics if face is detected
-      if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+      if (results && results.faceLandmarks && results.faceLandmarks.length > 0) {
         const metrics = this.extractMetrics(results.faceLandmarks[0], timestamp);
         
         // Only log eye metrics occasionally to reduce console noise

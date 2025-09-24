@@ -9,7 +9,8 @@
     "alarms",
     "notifications",
     "activeTab",
-    "offscreen"
+    "offscreen",
+    "tabs"
     ],
   
   "optional_permissions": [],

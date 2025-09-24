@@ -50,7 +50,8 @@ class CVWorker {
   private async handleMessage(event: MessageEvent<WorkerMessage>): Promise<void> {
     const { type, data } = event.data;
     
-    console.log(`📨 CV Worker: Received ${type} message`, data ? 'with data' : 'without data');
+    const messageTimestamp = new Date().toISOString();
+    console.log(`📨 [${messageTimestamp}] CV Worker: Received ${type} message`, data ? 'with data' : 'without data');
     
     // Only log non-process messages to reduce console noise
     if (type !== 'process') {
@@ -68,7 +69,8 @@ class CVWorker {
           break;
         case 'process':
           if (data) {
-            console.log('🎯 CV Worker: Processing frame message received');
+            const timestamp = new Date().toISOString();
+            console.log(`🎯 [${timestamp}] CV Worker: Processing frame message received`);
             await this.processFrame(data);
           } else {
             console.warn('⚠️ CV Worker: Process message received without data');
@@ -159,8 +161,9 @@ class CVWorker {
       
       this.frameCount++;
       
-      console.log(`🔍 CV Worker: Processing detection frame ${this.frameCount} at timestamp ${timestamp}`);
-      console.log('🔍 CV Worker: detectForVideo available?', typeof (globalThis as any).detectForVideo);
+      const logTimestamp = new Date().toISOString();
+      console.log(`🔍 [${logTimestamp}] CV Worker: Processing detection frame ${this.frameCount} at timestamp ${timestamp}`);
+      console.log(`🔍 [${logTimestamp}] CV Worker: detectForVideo available?`, typeof (globalThis as any).detectForVideo);
       
       // Create HTMLCanvasElement from ImageData for MediaPipe
       const canvas = new OffscreenCanvas(imageData.width, imageData.height);
@@ -174,7 +177,7 @@ class CVWorker {
       }
 
       // Process frame with MediaPipe using the global detection function
-      console.log('🎯 CV Worker: Calling detectForVideo with canvas:', canvas.width, 'x', canvas.height);
+      console.log(`🎯 [${logTimestamp}] CV Worker: Calling detectForVideo with canvas:`, canvas.width, 'x', canvas.height);
       const results = await (globalThis as any).detectForVideo(
         canvas as any,
         timestamp

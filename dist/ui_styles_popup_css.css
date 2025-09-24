@@ -1,3 +1,6 @@
+/*!*****************************************************************************************************************!*\
+  !*** css ./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./ui/styles/popup.css ***!
+  \*****************************************************************************************************************/
 /* Popup Styles */
 *, ::before, ::after {
   --tw-border-spacing-x: 0;
@@ -1218,6 +1221,10 @@ video {
   --tw-text-opacity: 1;
   color: rgb(126 34 206 / var(--tw-text-opacity, 1));
 }
+.text-purple-800 {
+  --tw-text-opacity: 1;
+  color: rgb(107 33 168 / var(--tw-text-opacity, 1));
+}
 .text-purple-900 {
   --tw-text-opacity: 1;
   color: rgb(88 28 135 / var(--tw-text-opacity, 1));
@@ -1864,6 +1871,9 @@ input:focus {
   }
 }
 @media (min-width: 768px) {
+  .md\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .md\:px-6 {
     padding-left: 1.5rem;
     padding-right: 1.5rem;
@@ -1872,6 +1882,9 @@ input:focus {
 @media (min-width: 1024px) {
   .lg\:grid-cols-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .lg\:grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .lg\:gap-6 {
     gap: 1.5rem;
@@ -1899,3 +1912,5 @@ input:focus {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+/*# sourceMappingURL=ui_styles_popup_css.css.map*/

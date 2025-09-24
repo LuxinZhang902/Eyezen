@@ -3,7 +3,7 @@ import { DashboardProps, UserData, UserSettings, EyeMetrics, BreakSession, Weekl
 import { ChromeStorageService } from '../../core/storage/index';
 
 interface DashboardState {
-  activeTab: 'overview' | 'analytics' | 'goals' | 'settings' | 'privacy';
+  activeTab: 'overview' | 'eyeinfo' | 'analytics' | 'goals' | 'settings' | 'privacy';
   isLoading: boolean;
   error: string | null;
   weeklyData: WeeklySummary | null;
@@ -352,6 +352,51 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
     </div>
   );
 
+  const renderEyeInfo = () => {
+    // Static demo data for now
+    const eyeMetrics = {
+      fatigueScore: 25.5,
+      blinkRate: 18.2,
+      earValue: 0.285,
+      perclosValue: 12.3,
+      posture: 'GOOD'
+    };
+    const connectionStatus = 'Demo Mode - Static Data';
+    const alerts = [{ type: 'info', message: '👁️ Eye Info dashboard is now integrated into the main dashboard!' }];
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Real-time Eye Metrics</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h4 className="text-sm font-medium text-blue-800">Fatigue Score</h4>
+              <p className="text-2xl font-bold text-blue-600">{eyeMetrics.fatigueScore}%</p>
+            </div>
+            <div className="bg-green-50 p-4 rounded-lg">
+              <h4 className="text-sm font-medium text-green-800">Blink Rate</h4>
+              <p className="text-2xl font-bold text-green-600">{eyeMetrics.blinkRate}/min</p>
+            </div>
+            <div className="bg-purple-50 p-4 rounded-lg">
+              <h4 className="text-sm font-medium text-purple-800">Posture</h4>
+              <p className="text-2xl font-bold text-purple-600">{eyeMetrics.posture}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Connection Status</h3>
+          <p className="text-sm text-gray-600">{connectionStatus}</p>
+          {alerts.map((alert, index) => (
+            <div key={index} className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">{alert.message}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const renderPrivacy = () => (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-lg shadow-sm border">
@@ -441,6 +486,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
           <nav className="-mb-px flex space-x-4 sm:space-x-6 lg:space-x-8 overflow-x-auto scrollbar-hide">
             {[
               { id: 'overview', label: 'Overview', icon: '📊' },
+              { id: 'eyeinfo', label: 'Eye Info', icon: '👁️' },
               { id: 'analytics', label: 'Analytics', icon: '📈' },
               { id: 'goals', label: 'Goals', icon: '🎯' },
               { id: 'settings', label: 'Settings', icon: '⚙️' },
@@ -465,6 +511,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
 
         {/* Tab Content */}
         {state.activeTab === 'overview' && renderOverview()}
+        {state.activeTab === 'eyeinfo' && renderEyeInfo()}
         {state.activeTab === 'settings' && renderSettings()}
         {state.activeTab === 'privacy' && renderPrivacy()}
         {state.activeTab === 'analytics' && (

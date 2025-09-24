@@ -8,13 +8,13 @@ let canvas = null;
 let isProcessing = false;
 let frameCount = 0;
 
-console.log('🎬 Offscreen document message listener registered');
+console.log(`🎬 [${new Date().toISOString()}] Offscreen document message listener registered`);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Handle incoming messages without logging every single one
   
   if (message.type === 'DOWNLOAD_FRAME') {
-    console.log('📸 Processing DOWNLOAD_FRAME message in offscreen document');
+    console.log(`📸 [${new Date().toISOString()}] Processing DOWNLOAD_FRAME message in offscreen document`);
     
     // Handle async download frame request
     (async () => {
@@ -212,17 +212,19 @@ async function initializeCVProcessing(stream) {
     // Handle worker messages
     cvWorker.onmessage = (event) => {
       const { type, data } = event.data;
-      console.log('📨 Received message from CV worker:', type, data);
+      const timestamp = new Date().toISOString();
+      console.log(`📨 [${timestamp}] Received message from CV worker:`, type, data);
       
       switch (type) {
         case 'ready':
-          console.log('CV Worker initialized:', data.message);
+          console.log(`🚀 [${timestamp}] CV Worker initialized:`, data.message);
           // Tell the worker to start processing
           cvWorker.postMessage({ type: 'start' });
           startFrameProcessing();
           break;
         case 'metrics':
-          console.log('👁️ Eye metrics received:', data);
+          console.log(`👁️ [${timestamp}] Eye metrics received:`, data);
+          console.log(`📤 [${timestamp}] Forwarding metrics to service worker...`);
           // Forward metrics to popup/background
           chrome.runtime.sendMessage({
             type: 'EYE_METRICS',
@@ -230,7 +232,7 @@ async function initializeCVProcessing(stream) {
           });
           break;
         case 'error':
-          console.error('CV Worker error:', data.error);
+          console.error(`❌ [${timestamp}] CV Worker error:`, data.error);
           break;
       }
     };
@@ -337,4 +339,4 @@ async function stopCVProcessing() {
   console.log('CV processing stopped and cleaned up');
 }
 
-console.log('Offscreen document loaded for camera access and CV processing');
+console.log(`🎬 [${new Date().toISOString()}] Offscreen document loaded for camera access and CV processing`);

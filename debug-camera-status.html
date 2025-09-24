@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Camera Status Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .warning { background: #fff3cd; color: #856404; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        #logs { max-height: 400px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🎥 Camera Status Debug Tool</h1>
+    
+    <div class="status info">
+        <strong>Instructions:</strong>
+        <ol>
+            <li><strong>Method 1 (Recommended):</strong> Open Chrome extension popup → Right-click → Inspect → Console tab → Copy and paste the debug functions from this page</li>
+            <li><strong>Method 2:</strong> Add this HTML file to your extension manifest and access it as an extension page</li>
+            <li>Enable camera monitoring in the popup</li>
+            <li>Run the debug functions to check camera activity</li>
+        </ol>
+        <div class="status warning" style="margin-top: 10px;">
+            <strong>⚠️ Note:</strong> This page needs Chrome extension context to access storage. If you see "Chrome storage API not available" errors, use Method 1 above.
+        </div>
+    </div>
+    
+    <button onclick="checkCameraStatus()">🔍 Check Camera Status</button>
+    <button onclick="checkStorageMetrics()">📊 Check Storage Metrics</button>
+    <button onclick="clearLogs()">🗑️ Clear Logs</button>
+    <button onclick="showConsoleCode()">📋 Show Console Code</button>
+    
+    <div id="status" class="status info">Ready to check camera status...</div>
+    
+    <h3>📋 Debug Logs</h3>
+    <div id="logs"></div>
+    
+    <script>
+        let logCount = 0;
+        
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `status ${type}`;
+            logEntry.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            logsDiv.appendChild(logEntry);
+            logCount++;
+            
+            if (logCount > 50) {
+                logsDiv.removeChild(logsDiv.firstChild);
+                logCount--;
+            }
+            
+            logEntry.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+        
+        async function checkCameraStatus() {
+            log('🔍 Checking camera status...', 'info');
+            updateStatus('Checking camera status...', 'info');
+            
+            try {
+                // Check if extension context exists
+                if (typeof chrome === 'undefined' || !chrome.runtime) {
+                    log('❌ Chrome extension API not available', 'error');
+                    updateStatus('Chrome extension API not available', 'error');
+                    return;
+                }
+                
+                // Check offscreen document contexts
+                const contexts = await chrome.runtime.getContexts({});
+                log(`📄 Found ${contexts.length} extension contexts`, 'info');
+                
+                const offscreenContext = contexts.find(ctx => ctx.contextType === 'OFFSCREEN_DOCUMENT');
+                if (offscreenContext) {
+                    log('✅ Offscreen document found and running', 'success');
+                } else {
+                    log('❌ No offscreen document found', 'error');
+                }
+                
+                // Check storage for recent metrics
+                if (!chrome.storage || !chrome.storage.local) {
+                    log('❌ Chrome storage API not available', 'error');
+                    updateStatus('Chrome storage API not available', 'error');
+                    return;
+                }
+                
+                const result = await chrome.storage.local.get(['latest_eye_metrics', 'userData']);
+                
+                if (result.latest_eye_metrics) {
+                    const { data, timestamp } = result.latest_eye_metrics;
+                    const age = Date.now() - timestamp;
+                    log(`📊 Found recent metrics (${Math.round(age/1000)}s ago): fatigueIndex=${data.fatigueIndex}`, 'success');
+                    updateStatus(`Camera active - metrics ${Math.round(age/1000)}s old`, 'success');
+                } else {
+                    log('⚠️ No recent metrics found in storage', 'warning');
+                }
+                
+                if (result.userData) {
+                    const settings = result.userData.settings;
+                    log(`⚙️ Camera enabled: ${settings.cameraEnabled}`, settings.cameraEnabled ? 'success' : 'warning');
+                } else {
+                    log('⚠️ No user data found', 'warning');
+                }
+                
+                // Send test message to service worker
+                chrome.runtime.sendMessage({ type: 'CAMERA_STATUS_CHECK' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        log(`❌ Service worker communication error: ${chrome.runtime.lastError.message}`, 'error');
+                    } else {
+                        log('✅ Service worker communication successful', 'success');
+                    }
+                });
+                
+            } catch (error) {
+                log(`❌ Error checking camera status: ${error.message}`, 'error');
+                updateStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function checkStorageMetrics() {
+            log('📊 Checking storage metrics...', 'info');
+            
+            try {
+                // Check if chrome.storage is available
+                if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
+                    log('❌ Chrome storage API not available - this page must be opened as a Chrome extension', 'error');
+                    log('💡 To fix: Open Chrome DevTools on the extension popup and run this code there', 'warning');
+                    updateStatus('Chrome storage API not available', 'error');
+                    return;
+                }
+                
+                const result = await chrome.storage.local.get(['userData']);
+                
+                if (result.userData && result.userData.metrics) {
+                    const metrics = result.userData.metrics;
+                    const recentMetrics = metrics.slice(-10);
+                    
+                    log(`📈 Total metrics stored: ${metrics.length}`, 'info');
+                    log(`📈 Recent metrics (last 10):`, 'info');
+                    
+                    recentMetrics.forEach((metric, index) => {
+                        const age = Math.round((Date.now() - metric.timestamp) / 1000);
+                        log(`  ${index + 1}. Fatigue: ${metric.fatigueIndex?.toFixed(2) || 'N/A'}, Blinks: ${metric.blinkRate?.toFixed(1) || 'N/A'} (${age}s ago)`, 'info');
+                    });
+                    
+                    updateStatus(`Found ${metrics.length} stored metrics`, 'success');
+                } else {
+                    log('❌ No metrics found in storage', 'error');
+                    updateStatus('No metrics found in storage', 'error');
+                }
+            } catch (error) {
+                log(`❌ Error checking storage: ${error.message}`, 'error');
+                updateStatus(`Storage error: ${error.message}`, 'error');
+            }
+        }
+        
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+            logCount = 0;
+            updateStatus('Logs cleared', 'info');
+        }
+        
+        function showConsoleCode() {
+            const code = `
+// 🎥 EyeZen Debug Functions - Copy and paste into extension DevTools console
+
+// Check camera status and recent metrics
+async function debugCameraStatus() {
+    console.log('🔍 Checking camera status...');
+    
+    try {
+        // Check storage for recent metrics
+        const result = await chrome.storage.local.get(['latest_eye_metrics', 'userData']);
+        
+        if (result.latest_eye_metrics) {
+            const { data, timestamp } = result.latest_eye_metrics;
+            const age = Date.now() - timestamp;
+            console.log('📊 Recent metrics found:', {
+                fatigueIndex: data.fatigueIndex,
+                blinkRate: data.blinkRate,
+                ageSeconds: Math.round(age/1000)
+            });
+        } else {
+            console.log('⚠️ No recent metrics found in storage');
+        }
+        
+        if (result.userData?.settings) {
+            console.log('⚙️ Camera enabled:', result.userData.settings.cameraEnabled);
+        }
+        
+        // Check extension contexts
+        const contexts = await chrome.runtime.getContexts({});
+        const offscreen = contexts.find(ctx => ctx.contextType === 'OFFSCREEN_DOCUMENT');
+        console.log('📄 Offscreen document active:', !!offscreen);
+        
+    } catch (error) {
+        console.error('❌ Debug error:', error);
+    }
+}
+
+// Check stored metrics history
+async function debugStorageMetrics() {
+    try {
+        const result = await chrome.storage.local.get(['userData']);
+        if (result.userData?.metrics) {
+            const recent = result.userData.metrics.slice(-5);
+            console.log('📈 Recent 5 metrics:', recent);
+        } else {
+            console.log('❌ No metrics in storage');
+        }
+    } catch (error) {
+        console.error('❌ Storage error:', error);
+    }
+}
+
+// Run both debug functions
+debugCameraStatus();
+debugStorageMetrics();
+            `;
+            
+            // Create a modal to show the code
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.8); z-index: 1000;
+                display: flex; align-items: center; justify-content: center;
+            `;
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                background: white; padding: 20px; border-radius: 10px;
+                max-width: 80%; max-height: 80%; overflow: auto;
+                position: relative;
+            `;
+            
+            content.innerHTML = `
+                <h3>📋 Console Debug Code</h3>
+                <p>Copy this code and paste it into the Chrome extension popup's DevTools console:</p>
+                <textarea readonly style="width: 100%; height: 400px; font-family: monospace; font-size: 12px;">${code}</textarea>
+                <br><br>
+                <button onclick="this.parentElement.parentElement.remove()" style="padding: 10px 20px;">Close</button>
+                <button onclick="navigator.clipboard.writeText(this.parentElement.querySelector('textarea').value).then(() => alert('Copied to clipboard!'))" style="padding: 10px 20px; margin-left: 10px;">Copy to Clipboard</button>
+            `;
+            
+            modal.appendChild(content);
+            document.body.appendChild(modal);
+            
+            // Close on background click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.remove();
+            });
+        }
+        
+        // Auto-check every 10 seconds
+        setInterval(() => {
+            checkStorageMetrics();
+        }, 10000);
+        
+        // Initial check
+        setTimeout(() => {
+            checkCameraStatus();
+        }, 1000);
+    </script>
+</body>
+</html>

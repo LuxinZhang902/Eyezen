@@ -73,7 +73,8 @@ function detectForVideo(imageData, timestamp) {
   }
   
   try {
-    console.log('🔍 Processing frame for face detection:', {
+    const logTimestamp = new Date().toISOString();
+    console.log(`🔍 [${logTimestamp}] Processing frame for face detection:`, {
       imageWidth: imageData.width,
       imageHeight: imageData.height,
       timestamp: timestamp
@@ -89,7 +90,7 @@ function detectForVideo(imageData, timestamp) {
         landmarksCount: results.faceLandmarks[0].length
       });
     } else {
-      console.log('❌ No face detected in frame');
+      console.log(`❌ [${logTimestamp}] No face detected in frame`);
     }
     
     return results;

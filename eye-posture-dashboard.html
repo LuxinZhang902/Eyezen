@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eye & Posture Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .header p {
+            color: #6c757d;
+            font-size: 1.1rem;
+        }
+        
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8f9fa;
+            padding: 15px 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            border-left: 5px solid #28a745;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+        
+        .metric-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            border-left: 5px solid #007bff;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+        
+        .metric-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        
+        .metric-icon {
+            font-size: 2rem;
+            opacity: 0.8;
+        }
+        
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .metric-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .metric-trend {
+            font-size: 0.8rem;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        
+        .trend-up {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .trend-down {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .trend-stable {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .charts-section {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .chart-container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+        }
+        
+        .chart-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .posture-status {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            margin-bottom: 30px;
+        }
+        
+        .posture-visual {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .posture-avatar {
+            font-size: 4rem;
+            margin-bottom: 15px;
+        }
+        
+        .posture-label {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .posture-description {
+            color: #6c757d;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        
+        .alerts-section {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            margin-bottom: 30px;
+        }
+        
+        .alert-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            border-left: 4px solid;
+        }
+        
+        .alert-warning {
+            background: #fff3cd;
+            border-color: #ffc107;
+            color: #856404;
+        }
+        
+        .alert-danger {
+            background: #f8d7da;
+            border-color: #dc3545;
+            color: #721c24;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            border-color: #17a2b8;
+            color: #0c5460;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,123,255,0.3);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+            transform: translateY(-2px);
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #20c997);
+            transition: width 0.3s ease;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .data-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .timestamp {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>👁️ Eye & Posture Dashboard</h1>
+            <p>Real-time monitoring of your eye health and posture metrics</p>
+        </div>
+        
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="connectionStatus">Connecting to extension...</span>
+            </div>
+            <div class="timestamp" id="lastUpdate">Last updated: Never</div>
+        </div>
+        
+        <div class="controls">
+            <button class="btn btn-primary" onclick="startMonitoring()">Start Monitoring</button>
+            <button class="btn btn-secondary" onclick="stopMonitoring()">Stop Monitoring</button>
+            <button class="btn btn-secondary" onclick="resetData()">Reset Data</button>
+        </div>
+        
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-header">
+                    <div class="metric-icon">😴</div>
+                    <div class="metric-trend trend-stable" id="fatigueTrend">Stable</div>
+                </div>
+                <div class="metric-value" id="fatigueScore">0</div>
+                <div class="metric-label">Fatigue Score</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="fatigueProgress" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-header">
+                    <div class="metric-icon">👀</div>
+                    <div class="metric-trend trend-stable" id="blinkTrend">Normal</div>
+                </div>
+                <div class="metric-value" id="blinkRate">0</div>
+                <div class="metric-label">Blinks per Minute</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="blinkProgress" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-header">
+                    <div class="metric-icon">👁️</div>
+                    <div class="metric-trend trend-stable" id="earTrend">Normal</div>
+                </div>
+                <div class="metric-value" id="earValue">0.000</div>
+                <div class="metric-label">Eye Aspect Ratio</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="earProgress" style="width: 50%"></div>
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-header">
+                    <div class="metric-icon">😪</div>
+                    <div class="metric-trend trend-stable" id="perclosTrend">Good</div>
+                </div>
+                <div class="metric-value" id="perclosValue">0.0</div>
+                <div class="metric-label">PERCLOS (%)</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="perclosProgress" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="charts-section">
+            <div class="chart-container">
+                <div class="chart-title">📈 Real-time Metrics Timeline</div>
+                <canvas id="metricsChart" width="400" height="200"></canvas>
+            </div>
+            
+            <div class="posture-status">
+                <div class="chart-title">🧍 Posture Status</div>
+                <div class="posture-visual">
+                    <div class="posture-avatar" id="postureAvatar">🧍</div>
+                    <div class="posture-label" id="postureLabel">Unknown</div>
+                    <div class="posture-description" id="postureDescription">Waiting for posture data...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="alerts-section">
+            <div class="chart-title">⚠️ Health Alerts</div>
+            <div id="alertsContainer">
+                <div class="alert-item alert-info">
+                    <span>ℹ️</span>
+                    <span>Dashboard initialized. Start monitoring to see real-time data.</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <div class="chart-title">📊 Recent Measurements</div>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Fatigue Score</th>
+                        <th>Blink Rate</th>
+                        <th>EAR</th>
+                        <th>PERCLOS</th>
+                        <th>Posture</th>
+                    </tr>
+                </thead>
+                <tbody id="dataTableBody">
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: #6c757d;">No data available</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        let monitoring = false;
+        let messageListener = null;
+        let metricsChart = null;
+        let dataHistory = [];
+        let maxDataPoints = 20;
+        
+        // Chart configuration
+        const chartConfig = {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Fatigue Score',
+                        data: [],
+                        borderColor: '#dc3545',
+                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Blink Rate',
+                        data: [],
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        tension: 0.4
+                    },
+                    {
+                        label: 'PERCLOS',
+                        data: [],
+                        borderColor: '#ffc107',
+                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                        tension: 0.4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top'
+                    }
+                }
+            }
+        };
+        
+        function initializeChart() {
+            const ctx = document.getElementById('metricsChart').getContext('2d');
+            metricsChart = new Chart(ctx, chartConfig);
+        }
+        
+        function updateMetric(id, value, suffix = '') {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = value + suffix;
+            }
+        }
+        
+        function updateProgress(id, percentage) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.style.width = percentage + '%';
+            }
+        }
+        
+        function updateTrend(id, trend, className) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = trend;
+                element.className = 'metric-trend ' + className;
+            }
+        }
+        
+        function updatePosture(posture) {
+            const avatarMap = {
+                'GOOD': { emoji: '🧍', label: 'Good Posture', desc: 'Excellent! Your posture is well-aligned.' },
+                'FORWARD': { emoji: '🤦', label: 'Forward Head', desc: 'Your head is leaning forward. Sit back and align your head.' },
+                'TILTED': { emoji: '🤷', label: 'Head Tilted', desc: 'Your head is tilted. Try to keep it centered.' },
+                'POOR': { emoji: '😵', label: 'Poor Posture', desc: 'Multiple posture issues detected. Please adjust your position.' }
+            };
+            
+            const postureData = avatarMap[posture] || avatarMap['POOR'];
+            
+            updateMetric('postureAvatar', postureData.emoji);
+            updateMetric('postureLabel', postureData.label);
+            updateMetric('postureDescription', postureData.desc);
+        }
+        
+        function addAlert(type, message) {
+            const container = document.getElementById('alertsContainer');
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert-item alert-${type}`;
+            
+            const icon = type === 'warning' ? '⚠️' : type === 'danger' ? '🚨' : 'ℹ️';
+            alertDiv.innerHTML = `<span>${icon}</span><span>${message}</span>`;
+            
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            // Remove old alerts (keep only 5)
+            const alerts = container.querySelectorAll('.alert-item');
+            if (alerts.length > 5) {
+                container.removeChild(alerts[alerts.length - 1]);
+            }
+        }
+        
+        function updateChart(metrics) {
+            if (!metricsChart) return;
+            
+            const time = new Date().toLocaleTimeString();
+            
+            // Add new data point
+            metricsChart.data.labels.push(time);
+            metricsChart.data.datasets[0].data.push(metrics.fatigueIndex);
+            metricsChart.data.datasets[1].data.push(metrics.blinkRate);
+            metricsChart.data.datasets[2].data.push(metrics.perclosValue);
+            
+            // Remove old data points
+            if (metricsChart.data.labels.length > maxDataPoints) {
+                metricsChart.data.labels.shift();
+                metricsChart.data.datasets.forEach(dataset => dataset.data.shift());
+            }
+            
+            metricsChart.update('none');
+        }
+        
+        function updateDataTable(metrics) {
+            const tbody = document.getElementById('dataTableBody');
+            const row = document.createElement('tr');
+            
+            row.innerHTML = `
+                <td>${new Date().toLocaleTimeString()}</td>
+                <td>${metrics.fatigueIndex.toFixed(1)}</td>
+                <td>${metrics.blinkRate.toFixed(1)}</td>
+                <td>${metrics.earValue.toFixed(3)}</td>
+                <td>${metrics.perclosValue.toFixed(1)}%</td>
+                <td>${metrics.posture}</td>
+            `;
+            
+            // Clear "No data" message
+            if (tbody.children.length === 1 && tbody.children[0].children.length === 1) {
+                tbody.innerHTML = '';
+            }
+            
+            tbody.insertBefore(row, tbody.firstChild);
+            
+            // Keep only 10 rows
+            if (tbody.children.length > 10) {
+                tbody.removeChild(tbody.lastChild);
+            }
+        }
+        
+        function processMetrics(metrics) {
+            console.log('📊 Dashboard received metrics:', metrics);
+            
+            // Update main metrics with proper formatting
+            updateMetric('fatigueScore', `${metrics.fatigueIndex.toFixed(1)} / 100`);
+            updateMetric('blinkRate', metrics.blinkRate.toFixed(1));
+            updateMetric('earValue', metrics.earValue.toFixed(3));
+            updateMetric('perclosValue', metrics.perclosValue.toFixed(1), '%');
+            
+            console.log('🎯 Final Fatigue Index:', metrics.fatigueIndex.toFixed(1), '/ 100');
+            
+            // Update progress bars
+            updateProgress('fatigueProgress', metrics.fatigueIndex);
+            updateProgress('blinkProgress', Math.min(100, (metrics.blinkRate / 30) * 100));
+            updateProgress('earProgress', (metrics.earValue / 0.4) * 100);
+            updateProgress('perclosProgress', metrics.perclosValue);
+            
+            // Update trends
+            updateTrend('fatigueTrend', 
+                metrics.fatigueIndex > 70 ? 'High' : metrics.fatigueIndex > 30 ? 'Moderate' : 'Low',
+                metrics.fatigueIndex > 70 ? 'trend-down' : metrics.fatigueIndex > 30 ? 'trend-up' : 'trend-stable'
+            );
+            
+            updateTrend('blinkTrend',
+                metrics.blinkRate < 10 || metrics.blinkRate > 25 ? 'Abnormal' : 'Normal',
+                metrics.blinkRate < 10 || metrics.blinkRate > 25 ? 'trend-down' : 'trend-stable'
+            );
+            
+            // Update posture
+            updatePosture(metrics.posture);
+            
+            // Update chart
+            updateChart(metrics);
+            
+            // Update data table
+            updateDataTable(metrics);
+            
+            // Generate alerts
+            if (metrics.fatigueIndex > 80) {
+                addAlert('danger', 'Critical fatigue level detected! Take a break immediately.');
+            } else if (metrics.fatigueIndex > 60) {
+                addAlert('warning', 'High fatigue detected. Consider taking a short break.');
+            }
+            
+            if (metrics.blinkRate < 8) {
+                addAlert('warning', 'Low blink rate detected. Remember to blink regularly.');
+            }
+            
+            if (metrics.perclosValue > 15) {
+                addAlert('warning', 'High eye closure percentage. You may be getting drowsy.');
+            }
+            
+            // Update timestamp
+            document.getElementById('lastUpdate').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+        }
+        
+        function startMonitoring() {
+            if (monitoring) return;
+            
+            monitoring = true;
+            document.getElementById('connectionStatus').textContent = 'Connected - Monitoring active';
+            document.getElementById('statusDot').style.background = '#28a745';
+            
+            addAlert('info', 'Monitoring started. Real-time data will appear shortly.');
+            
+            // Listen for messages from extension
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                messageListener = (message, sender, sendResponse) => {
+                    if (message.type === 'EYE_METRICS') {
+                        processMetrics(message.data);
+                    }
+                };
+                // Listen for messages sent via chrome.tabs.sendMessage
+                chrome.runtime.onMessage.addListener(messageListener);
+            } else {
+                addAlert('warning', 'Chrome extension API not available. Running in demo mode.');
+                // Start demo mode
+                startDemoMode();
+            }
+        }
+        
+        function stopMonitoring() {
+            monitoring = false;
+            document.getElementById('connectionStatus').textContent = 'Disconnected';
+            document.getElementById('statusDot').style.background = '#dc3545';
+            
+            if (messageListener && typeof chrome !== 'undefined' && chrome.runtime) {
+                chrome.runtime.onMessage.removeListener(messageListener);
+                messageListener = null;
+            }
+            
+            addAlert('info', 'Monitoring stopped.');
+        }
+        
+        function resetData() {
+            // Clear chart
+            if (metricsChart) {
+                metricsChart.data.labels = [];
+                metricsChart.data.datasets.forEach(dataset => dataset.data = []);
+                metricsChart.update();
+            }
+            
+            // Clear data table
+            document.getElementById('dataTableBody').innerHTML = 
+                '<tr><td colspan="6" style="text-align: center; color: #6c757d;">No data available</td></tr>';
+            
+            // Reset metrics
+            updateMetric('fatigueScore', '0');
+            updateMetric('blinkRate', '0');
+            updateMetric('earValue', '0.000');
+            updateMetric('perclosValue', '0.0');
+            
+            // Reset progress bars
+            updateProgress('fatigueProgress', 0);
+            updateProgress('blinkProgress', 0);
+            updateProgress('earProgress', 50);
+            updateProgress('perclosProgress', 0);
+            
+            addAlert('info', 'Dashboard data reset.');
+        }
+        
+        function startDemoMode() {
+            console.log('🎭 Starting demo mode with simulated eye strain data');
+            addAlert('info', 'Demo mode active - showing simulated eye strain scores');
+            
+            // Simulate data for demo purposes
+            setInterval(() => {
+                if (!monitoring) return;
+                
+                const demoMetrics = {
+                    fatigueIndex: Math.random() * 100,
+                    blinkRate: 10 + Math.random() * 20,
+                    earValue: 0.2 + Math.random() * 0.2,
+                    perclosValue: Math.random() * 20,
+                    posture: ['GOOD', 'FORWARD', 'TILTED'][Math.floor(Math.random() * 3)],
+                    timestamp: Date.now()
+                };
+                
+                console.log('🎯 Demo Final Fatigue Index:', demoMetrics.fatigueIndex.toFixed(1), '/ 100');
+                processMetrics(demoMetrics);
+            }, 2000);
+        }
+        
+        // Initialize dashboard
+        window.addEventListener('load', () => {
+            initializeChart();
+            addAlert('info', 'Dashboard loaded successfully. Click "Start Monitoring" to begin.');
+        });
+    </script>
+</body>
+</html>

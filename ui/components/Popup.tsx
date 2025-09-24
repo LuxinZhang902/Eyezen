@@ -45,7 +45,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       weekly: 50,
       trend: 'stable'
     },
-    realtimeScore: 85, // Start with a default score to show the component
+    realtimeScore: -1, // Start with -1 to show placeholder until real data is available
     isLoading: true,
     cameraEnabled: true,
     lastBreakTime: null,
@@ -74,26 +74,61 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     const stateValidationInterval = setInterval(() => {
       validateCameraState();
     }, 3000); // Check every 3 seconds
-    
+
     // Set up message listener for eye metrics from CV worker
     const messageListener = (message: any, sender: any, sendResponse: any) => {
+      console.log('🔥 POPUP: Message received:', message.type, message);
       if (message.type === 'EYE_METRICS') {
+        console.log('🔥 POPUP: EYE_METRICS message received, calling handleEyeMetrics');
         handleEyeMetrics(message.data);
       }
     };
-    
+
     if (typeof chrome !== 'undefined' && chrome.runtime) {
       chrome.runtime.onMessage.addListener(messageListener);
-    }
-    
-    return () => {
-      clearInterval(interval);
-      clearInterval(permissionCheckInterval);
-      clearInterval(stateValidationInterval);
-      if (typeof chrome !== 'undefined' && chrome.runtime) {
-        chrome.runtime.onMessage.removeListener(messageListener);
-      }
-    };
+      
+      // Send a test message to verify message system works
+      setTimeout(() => {
+        console.log('🧪 POPUP: Sending test message to service worker');
+        chrome.runtime.sendMessage({ type: 'POPUP_TEST', data: 'Hello from popup' }, (response) => {
+          console.log('🧪 POPUP: Test message response:', response);
+        });
+      }, 1000);
+      
+      // Fallback: Poll storage for eye metrics in case runtime messages don't work
+      const storagePollingInterval = setInterval(async () => {
+        try {
+          const result = await chrome.storage.local.get(['latest_eye_metrics']);
+          if (result.latest_eye_metrics) {
+            const { data, timestamp } = result.latest_eye_metrics;
+            // Only process if this is a new metric (within last 5 seconds)
+            if (Date.now() - timestamp < 5000) {
+              console.log('🔄 POPUP: Processing eye metrics from storage fallback:', data);
+              handleEyeMetrics(data);
+              // Clear the processed metric to avoid reprocessing
+              await chrome.storage.local.remove(['latest_eye_metrics']);
+            }
+          }
+        } catch (error) {
+          console.log('🔄 POPUP: Error polling storage for metrics:', error);
+        }
+      }, 1000); // Check every second
+      
+      // Store the storage polling interval for cleanup
+      (window as any).storagePollingInterval = storagePollingInterval;
+     }
+     
+     return () => {
+       clearInterval(interval);
+       clearInterval(permissionCheckInterval);
+       clearInterval(stateValidationInterval);
+       if ((window as any).storagePollingInterval) {
+         clearInterval((window as any).storagePollingInterval);
+       }
+       if (typeof chrome !== 'undefined' && chrome.runtime) {
+         chrome.runtime.onMessage.removeListener(messageListener);
+       }
+     };10
   }, []);
 
   const loadLoginState = async () => {
@@ -156,6 +191,12 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
           recommendation = 'Moderate eye fatigue. A 5-minute guided relaxation break is recommended.';
         }
 
+        // Calculate initial real-time score from most recent metrics
+        const mostRecentMetric = recentMetrics[recentMetrics.length - 1];
+        const initialRealtimeScore = mostRecentMetric 
+          ? Math.round(Math.max(0, Math.min(100, 100 - (mostRecentMetric.fatigueIndex * 100))))
+          : -1; // Use -1 if no recent metrics available
+
         // Initialize camera stream flag - do NOT automatically start camera
         // Camera should only be activated when user explicitly clicks the toggle
         (window as any).eyeZenCameraStream = null;
@@ -169,6 +210,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
             weekly: healthScore.overall,
             trend: healthScore.trend
           },
+          realtimeScore: initialRealtimeScore,
           isLoading: false,
           cameraEnabled: userData.settings.cameraEnabled,
           lastBreakTime: lastBreak?.endTime || null,
@@ -191,6 +233,10 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
   // Handle eye metrics from CV worker
   const handleEyeMetrics = async (eyeMetrics: any) => {
     try {
+      const timestamp = new Date().toISOString();
+      // Always log when handleEyeMetrics is called for debugging
+      console.log(`🔥 [${timestamp}] POPUP: handleEyeMetrics called with:`, eyeMetrics);
+      
       // Only log face detection occasionally to reduce console noise
         if (Date.now() - lastLogTimeRef.current > 10000) { // Log every 10 seconds
           console.log('👤 Face detected! Received eye metrics:', eyeMetrics);
@@ -216,6 +262,12 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       const realtimeFatigueScore = Math.max(0, Math.min(100, 100 - (eyeMetrics.fatigueIndex * 100)));
       const newStatus = determineUserStatus(newScore, [eyeMetrics]);
       
+      console.log(`🔥 [${timestamp}] POPUP: Score calculation:`);
+      console.log(`  - fatigueIndex: ${eyeMetrics.fatigueIndex}`);
+      console.log(`  - newScore: ${newScore}`);
+      console.log(`  - realtimeFatigueScore: ${realtimeFatigueScore}`);
+      console.log(`  - rounded score: ${Math.round(realtimeFatigueScore)}`);
+      
       setState(prev => ({
         ...prev,
         status: newStatus,
@@ -226,7 +278,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
         realtimeScore: Math.round(realtimeFatigueScore)
       }));
       
-      console.log('Updated realtimeScore:', Math.round(realtimeFatigueScore));
+      console.log(`🔥 [${timestamp}] POPUP: Updated realtimeScore:`, Math.round(realtimeFatigueScore));
       
       // Generate AI recommendation based on current metrics
       if (eyeMetrics.fatigueIndex > 0.7) {

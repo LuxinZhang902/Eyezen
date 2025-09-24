@@ -95,13 +95,40 @@ class BackgroundService {
         return true; // Keep message port open for async response
       }
       
-      // Handle EYE_METRICS messages from offscreen document - forward to popup
+      // Handle test message from popup
+      if (message.type === 'POPUP_TEST') {
+        console.log('🧪 Service Worker: Received test message from popup:', message.data);
+        sendResponse({ success: true, message: 'Test message received by service worker' });
+        return false;
+      }
+      
+      // Handle EYE_METRICS messages from offscreen document - forward to popup and dashboard
       if (message.type === 'EYE_METRICS') {
-        console.log('👁️ Service Worker: Forwarding eye metrics to popup');
-        // Forward to all extension contexts (popup, options page, etc.)
-        chrome.runtime.sendMessage(message).catch(() => {
-          // Ignore errors if no listeners (popup might be closed)
+        const timestamp = new Date().toISOString();
+        console.log(`👁️ [${timestamp}] Service Worker: Received EYE_METRICS from offscreen:`, message.data);
+        console.log(`📤 [${timestamp}] Service Worker: Forwarding eye metrics to popup and dashboard`);
+        
+        // Store the metrics in chrome.storage for popup to access
+        try {
+          await chrome.storage.local.set({
+            'latest_eye_metrics': {
+              data: message.data,
+              timestamp: Date.now()
+            }
+          });
+          console.log(`💾 [${timestamp}] Service Worker: Stored eye metrics in storage`);
+        } catch (error) {
+          console.log(`❌ [${timestamp}] Service Worker: Error storing metrics:`, error);
+        }
+        
+        // Try to forward to extension contexts
+        chrome.runtime.sendMessage(message).catch((error) => {
+          console.log(`⚠️ [${timestamp}] Service Worker: Error forwarding to popup (expected if popup closed):`, error);
         });
+        
+        // Also forward to any open dashboard tabs
+        this.forwardToDashboardTabs(message);
+        
         sendResponse({ success: true });
         return false;
       }
@@ -501,6 +528,33 @@ class BackgroundService {
     } catch (error) {
       console.error('❌ Error in forwardToOffscreenDocument:', error);
       sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  private async forwardToDashboardTabs(message: any): Promise<void> {
+    try {
+      // Query for tabs that contain the dashboard page
+      const tabs = await chrome.tabs.query({ url: '*://*/eye-posture-dashboard.html' });
+      
+      // Also check for file:// URLs (local development)
+      const localTabs = await chrome.tabs.query({ url: 'file://*/eye-posture-dashboard.html' });
+      
+      const allDashboardTabs = [...tabs, ...localTabs];
+      
+      // Send message to each dashboard tab
+      for (const tab of allDashboardTabs) {
+        if (tab.id) {
+          chrome.tabs.sendMessage(tab.id, message).catch(() => {
+            // Ignore errors if tab is not ready or doesn't have content script
+          });
+        }
+      }
+      
+      if (allDashboardTabs.length > 0) {
+        console.log(`📊 Forwarded metrics to ${allDashboardTabs.length} dashboard tab(s)`);
+      }
+    } catch (error) {
+      console.error('❌ Failed to forward message to dashboard tabs:', error);
     }
   }
 

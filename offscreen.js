@@ -261,7 +261,7 @@ function startFrameProcessing() {
     return;
   }
   
-  console.log('🎬 Starting timer-based frame processing every 2 minutes...');
+  console.log('🎬 Starting real-time frame processing...');
   isProcessing = true;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   let detectionCount = 0;
@@ -276,13 +276,13 @@ function startFrameProcessing() {
       // Check if video is actually playing
       if (videoElement.readyState < 2) {
         console.log('⚠️ Video not ready yet, skipping detection');
-        setTimeout(processFrame, 120000); // Try again in 2 minutes
+        setTimeout(processFrame, 1000); // Try again in 1 second
         return;
       }
       
       frameCount++;
-      if (frameCount % 5 === 0) { // Log every 5 minutes at 1-minute intervals
-        console.log(`🔍 Detection active - Frame ${frameCount} processed (1-minute intervals)`);
+      if (frameCount % 30 === 0) { // Log every 30 frames (every 2 seconds at 15 FPS)
+        console.log(`🔍 Detection active - Frame ${frameCount} processed`);
       }
       
       // Draw current video frame to canvas
@@ -308,7 +308,7 @@ function startFrameProcessing() {
     }
     
     // Schedule next detection for real-time processing (~15 FPS)
-    setTimeout(processFrame, 60000); // 1 minute interval
+    setTimeout(processFrame, 67); // ~15 FPS (1000ms / 15 = 67ms)
   }
   
   // Start the first detection immediately

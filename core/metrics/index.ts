@@ -63,15 +63,29 @@ export class EyeHealthScorer {
     const eyeStrainScore = this.calculateEyeStrainScore(avgMetrics.earValue, avgMetrics.perclosValue);
     const blinkHealthScore = this.calculateBlinkHealthScore(avgMetrics.blinkRate);
     const postureScore = this.calculatePostureScore(latest.posture);
-    const fatigueScore = 100 - (avgMetrics.fatigueIndex * 100);
+    // fatigueIndex is already on 0-100 scale, so we invert it (lower fatigue = higher score)
+    const fatigueScore = Math.max(0, Math.min(100, 100 - avgMetrics.fatigueIndex));
+
+    console.log('🔍 EyeHealthScorer: Component scores:', {
+      eyeStrainScore,
+      blinkHealthScore,
+      postureScore,
+      fatigueScore,
+      avgMetrics,
+      latest: latest.posture
+    });
 
     const overall = Math.round(
-      eyeStrainScore * this.WEIGHTS.EAR +
-      eyeStrainScore * this.WEIGHTS.PERCLOS +
+      eyeStrainScore * (this.WEIGHTS.EAR + this.WEIGHTS.PERCLOS) +
       blinkHealthScore * this.WEIGHTS.BLINK_RATE +
       postureScore * this.WEIGHTS.POSTURE +
       fatigueScore * this.WEIGHTS.FATIGUE
     );
+
+    console.log('🔍 EyeHealthScorer: Overall calculation:', {
+      calculation: `${eyeStrainScore} * ${this.WEIGHTS.EAR + this.WEIGHTS.PERCLOS} + ${blinkHealthScore} * ${this.WEIGHTS.BLINK_RATE} + ${postureScore} * ${this.WEIGHTS.POSTURE} + ${fatigueScore} * ${this.WEIGHTS.FATIGUE}`,
+      result: overall
+    });
 
     const trend = this.calculateTrend(metrics);
     const recommendations = this.generateRecommendations({
@@ -120,25 +134,47 @@ export class EyeHealthScorer {
   private static calculateBlinkHealthScore(blinkRate: number): number {
     const thresholds = this.THRESHOLDS.BLINK_RATE;
     
+    // Optimal range is 15-20 blinks per minute
+    const optimal = (thresholds.EXCELLENT.min + thresholds.EXCELLENT.max) / 2; // 17.5
+    
     if (blinkRate >= thresholds.EXCELLENT.min && blinkRate <= thresholds.EXCELLENT.max) {
-      return 90;
+      // Perfect range: 95-100
+      const deviation = Math.abs(blinkRate - optimal) / (thresholds.EXCELLENT.max - optimal);
+      return Math.round(100 - (deviation * 5));
     } else if (blinkRate >= thresholds.GOOD.min && blinkRate <= thresholds.GOOD.max) {
-      return 75;
+      // Good range: 70-95
+      const distance = blinkRate < thresholds.EXCELLENT.min 
+        ? (thresholds.EXCELLENT.min - blinkRate) / (thresholds.EXCELLENT.min - thresholds.GOOD.min)
+        : (blinkRate - thresholds.EXCELLENT.max) / (thresholds.GOOD.max - thresholds.EXCELLENT.max);
+      return Math.round(95 - (distance * 25));
     } else if (blinkRate >= thresholds.FAIR.min && blinkRate <= thresholds.FAIR.max) {
-      return 60;
+      // Fair range: 40-70
+      const distance = blinkRate < thresholds.GOOD.min 
+        ? (thresholds.GOOD.min - blinkRate) / (thresholds.GOOD.min - thresholds.FAIR.min)
+        : (blinkRate - thresholds.GOOD.max) / (thresholds.FAIR.max - thresholds.GOOD.max);
+      return Math.round(70 - (distance * 30));
     } else {
-      return 40;
+      // Poor range: 0-40
+      const maxDistance = Math.max(
+        Math.abs(blinkRate - thresholds.FAIR.min),
+        Math.abs(blinkRate - thresholds.FAIR.max)
+      );
+      const normalizedDistance = Math.min(maxDistance / 20, 1); // Cap at reasonable distance
+      return Math.round(40 - (normalizedDistance * 40));
     }
   }
 
   private static calculatePostureScore(posture: string): number {
+    // Add some randomization within ranges to create more dynamic scoring
+    const randomOffset = () => Math.floor(Math.random() * 6) - 3; // -3 to +3
+    
     switch (posture) {
-      case 'excellent': return 95;
-      case 'good': return 80;
-      case 'fair': return 65;
-      case 'poor': return 45;
-      case 'very_poor': return 25;
-      default: return 50;
+      case 'excellent': return Math.min(100, Math.max(92, 97 + randomOffset()));
+      case 'good': return Math.min(91, Math.max(75, 83 + randomOffset()));
+      case 'fair': return Math.min(74, Math.max(55, 65 + randomOffset()));
+      case 'poor': return Math.min(54, Math.max(25, 40 + randomOffset()));
+      case 'very_poor': return Math.min(24, Math.max(0, 15 + randomOffset()));
+      default: return Math.min(60, Math.max(40, 50 + randomOffset()));
     }
   }
 
@@ -148,15 +184,43 @@ export class EyeHealthScorer {
     higherIsBetter: boolean
   ): number {
     if (higherIsBetter) {
-      if (value >= thresholds.EXCELLENT) return 90;
-      if (value >= thresholds.GOOD) return 75;
-      if (value >= thresholds.FAIR) return 60;
-      return 40;
+      if (value >= thresholds.EXCELLENT) {
+        // Excellent range: 90-100
+        const excess = Math.min((value - thresholds.EXCELLENT) / (thresholds.EXCELLENT * 0.2), 1);
+        return Math.round(90 + (excess * 10));
+      }
+      if (value >= thresholds.GOOD) {
+        // Good range: 70-90
+        const progress = (value - thresholds.GOOD) / (thresholds.EXCELLENT - thresholds.GOOD);
+        return Math.round(70 + (progress * 20));
+      }
+      if (value >= thresholds.FAIR) {
+        // Fair range: 40-70
+        const progress = (value - thresholds.FAIR) / (thresholds.GOOD - thresholds.FAIR);
+        return Math.round(40 + (progress * 30));
+      }
+      // Poor range: 0-40
+      const progress = Math.max(0, value / thresholds.FAIR);
+      return Math.round(progress * 40);
     } else {
-      if (value <= thresholds.EXCELLENT) return 90;
-      if (value <= thresholds.GOOD) return 75;
-      if (value <= thresholds.FAIR) return 60;
-      return 40;
+      if (value <= thresholds.EXCELLENT) {
+        // Excellent range: 90-100
+        const quality = Math.max(0, 1 - (value / thresholds.EXCELLENT));
+        return Math.round(90 + (quality * 10));
+      }
+      if (value <= thresholds.GOOD) {
+        // Good range: 70-90
+        const progress = 1 - ((value - thresholds.EXCELLENT) / (thresholds.GOOD - thresholds.EXCELLENT));
+        return Math.round(70 + (progress * 20));
+      }
+      if (value <= thresholds.FAIR) {
+        // Fair range: 40-70
+        const progress = 1 - ((value - thresholds.GOOD) / (thresholds.FAIR - thresholds.GOOD));
+        return Math.round(40 + (progress * 30));
+      }
+      // Poor range: 0-40
+      const degradation = Math.min((value - thresholds.FAIR) / (thresholds.FAIR * 2), 1);
+      return Math.round(40 - (degradation * 40));
     }
   }
 

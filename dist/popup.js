@@ -893,12 +893,24 @@ class EyeHealthScorer {
         const eyeStrainScore = this.calculateEyeStrainScore(avgMetrics.earValue, avgMetrics.perclosValue);
         const blinkHealthScore = this.calculateBlinkHealthScore(avgMetrics.blinkRate);
         const postureScore = this.calculatePostureScore(latest.posture);
-        const fatigueScore = 100 - (avgMetrics.fatigueIndex * 100);
-        const overall = Math.round(eyeStrainScore * this.WEIGHTS.EAR +
-            eyeStrainScore * this.WEIGHTS.PERCLOS +
+        // fatigueIndex is already on 0-100 scale, so we invert it (lower fatigue = higher score)
+        const fatigueScore = Math.max(0, Math.min(100, 100 - avgMetrics.fatigueIndex));
+        console.log('🔍 EyeHealthScorer: Component scores:', {
+            eyeStrainScore,
+            blinkHealthScore,
+            postureScore,
+            fatigueScore,
+            avgMetrics,
+            latest: latest.posture
+        });
+        const overall = Math.round(eyeStrainScore * (this.WEIGHTS.EAR + this.WEIGHTS.PERCLOS) +
             blinkHealthScore * this.WEIGHTS.BLINK_RATE +
             postureScore * this.WEIGHTS.POSTURE +
             fatigueScore * this.WEIGHTS.FATIGUE);
+        console.log('🔍 EyeHealthScorer: Overall calculation:', {
+            calculation: `${eyeStrainScore} * ${this.WEIGHTS.EAR + this.WEIGHTS.PERCLOS} + ${blinkHealthScore} * ${this.WEIGHTS.BLINK_RATE} + ${postureScore} * ${this.WEIGHTS.POSTURE} + ${fatigueScore} * ${this.WEIGHTS.FATIGUE}`,
+            result: overall
+        });
         const trend = this.calculateTrend(metrics);
         const recommendations = this.generateRecommendations({
             eyeStrain: eyeStrainScore,
@@ -940,47 +952,86 @@ class EyeHealthScorer {
     }
     static calculateBlinkHealthScore(blinkRate) {
         const thresholds = this.THRESHOLDS.BLINK_RATE;
+        // Optimal range is 15-20 blinks per minute
+        const optimal = (thresholds.EXCELLENT.min + thresholds.EXCELLENT.max) / 2; // 17.5
         if (blinkRate >= thresholds.EXCELLENT.min && blinkRate <= thresholds.EXCELLENT.max) {
-            return 90;
+            // Perfect range: 95-100
+            const deviation = Math.abs(blinkRate - optimal) / (thresholds.EXCELLENT.max - optimal);
+            return Math.round(100 - (deviation * 5));
         }
         else if (blinkRate >= thresholds.GOOD.min && blinkRate <= thresholds.GOOD.max) {
-            return 75;
+            // Good range: 70-95
+            const distance = blinkRate < thresholds.EXCELLENT.min
+                ? (thresholds.EXCELLENT.min - blinkRate) / (thresholds.EXCELLENT.min - thresholds.GOOD.min)
+                : (blinkRate - thresholds.EXCELLENT.max) / (thresholds.GOOD.max - thresholds.EXCELLENT.max);
+            return Math.round(95 - (distance * 25));
         }
         else if (blinkRate >= thresholds.FAIR.min && blinkRate <= thresholds.FAIR.max) {
-            return 60;
+            // Fair range: 40-70
+            const distance = blinkRate < thresholds.GOOD.min
+                ? (thresholds.GOOD.min - blinkRate) / (thresholds.GOOD.min - thresholds.FAIR.min)
+                : (blinkRate - thresholds.GOOD.max) / (thresholds.FAIR.max - thresholds.GOOD.max);
+            return Math.round(70 - (distance * 30));
         }
         else {
-            return 40;
+            // Poor range: 0-40
+            const maxDistance = Math.max(Math.abs(blinkRate - thresholds.FAIR.min), Math.abs(blinkRate - thresholds.FAIR.max));
+            const normalizedDistance = Math.min(maxDistance / 20, 1); // Cap at reasonable distance
+            return Math.round(40 - (normalizedDistance * 40));
         }
     }
     static calculatePostureScore(posture) {
+        // Add some randomization within ranges to create more dynamic scoring
+        const randomOffset = () => Math.floor(Math.random() * 6) - 3; // -3 to +3
         switch (posture) {
-            case 'excellent': return 95;
-            case 'good': return 80;
-            case 'fair': return 65;
-            case 'poor': return 45;
-            case 'very_poor': return 25;
-            default: return 50;
+            case 'excellent': return Math.min(100, Math.max(92, 97 + randomOffset()));
+            case 'good': return Math.min(91, Math.max(75, 83 + randomOffset()));
+            case 'fair': return Math.min(74, Math.max(55, 65 + randomOffset()));
+            case 'poor': return Math.min(54, Math.max(25, 40 + randomOffset()));
+            case 'very_poor': return Math.min(24, Math.max(0, 15 + randomOffset()));
+            default: return Math.min(60, Math.max(40, 50 + randomOffset()));
         }
     }
     static scoreByThreshold(value, thresholds, higherIsBetter) {
         if (higherIsBetter) {
-            if (value >= thresholds.EXCELLENT)
-                return 90;
-            if (value >= thresholds.GOOD)
-                return 75;
-            if (value >= thresholds.FAIR)
-                return 60;
-            return 40;
+            if (value >= thresholds.EXCELLENT) {
+                // Excellent range: 90-100
+                const excess = Math.min((value - thresholds.EXCELLENT) / (thresholds.EXCELLENT * 0.2), 1);
+                return Math.round(90 + (excess * 10));
+            }
+            if (value >= thresholds.GOOD) {
+                // Good range: 70-90
+                const progress = (value - thresholds.GOOD) / (thresholds.EXCELLENT - thresholds.GOOD);
+                return Math.round(70 + (progress * 20));
+            }
+            if (value >= thresholds.FAIR) {
+                // Fair range: 40-70
+                const progress = (value - thresholds.FAIR) / (thresholds.GOOD - thresholds.FAIR);
+                return Math.round(40 + (progress * 30));
+            }
+            // Poor range: 0-40
+            const progress = Math.max(0, value / thresholds.FAIR);
+            return Math.round(progress * 40);
         }
         else {
-            if (value <= thresholds.EXCELLENT)
-                return 90;
-            if (value <= thresholds.GOOD)
-                return 75;
-            if (value <= thresholds.FAIR)
-                return 60;
-            return 40;
+            if (value <= thresholds.EXCELLENT) {
+                // Excellent range: 90-100
+                const quality = Math.max(0, 1 - (value / thresholds.EXCELLENT));
+                return Math.round(90 + (quality * 10));
+            }
+            if (value <= thresholds.GOOD) {
+                // Good range: 70-90
+                const progress = 1 - ((value - thresholds.EXCELLENT) / (thresholds.GOOD - thresholds.EXCELLENT));
+                return Math.round(70 + (progress * 20));
+            }
+            if (value <= thresholds.FAIR) {
+                // Fair range: 40-70
+                const progress = 1 - ((value - thresholds.GOOD) / (thresholds.FAIR - thresholds.GOOD));
+                return Math.round(40 + (progress * 30));
+            }
+            // Poor range: 0-40
+            const degradation = Math.min((value - thresholds.FAIR) / (thresholds.FAIR * 2), 1);
+            return Math.round(40 - (degradation * 40));
         }
     }
     static calculateTrend(metrics) {
@@ -1567,6 +1618,7 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
         userEmail: ''
     });
     (0,react__WEBPACK_IMPORTED_MODULE_1__.useEffect)(() => {
+        console.log('🔥 POPUP: useEffect triggered, calling loadUserData');
         loadUserData();
         loadLoginState();
         // Set up periodic updates
@@ -1649,6 +1701,7 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
         }
     };
     const loadUserData = async () => {
+        console.log('🔥 POPUP: loadUserData function called');
         try {
             let userData = await _core_storage_index__WEBPACK_IMPORTED_MODULE_3__.ChromeStorageService.getUserData();
             // Initialize storage if no user data exists
@@ -1659,7 +1712,9 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
             if (userData) {
                 // Calculate current eye health score
                 const recentMetrics = userData.metrics.slice(-10);
+                console.log('🔍 POPUP: Recent metrics for health score calculation:', recentMetrics.length, recentMetrics);
                 const healthScore = _core_metrics_index__WEBPACK_IMPORTED_MODULE_5__.EyeHealthScorer.calculateScore(recentMetrics);
+                console.log('🔍 POPUP: Calculated health score:', healthScore);
                 // Determine user status based on score and recent metrics
                 const currentStatus = determineUserStatus(healthScore.overall, recentMetrics);
                 // Calculate streak days
@@ -1689,6 +1744,7 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
                 // Initialize camera stream flag - do NOT automatically start camera
                 // Camera should only be activated when user explicitly clicks the toggle
                 window.eyeZenCameraStream = null;
+                console.log('🔍 POPUP: Setting eyeScore.current to:', healthScore.overall);
                 setState(prev => ({
                     ...prev,
                     status: currentStatus,
@@ -1714,7 +1770,8 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
             }
         }
         catch (error) {
-            console.error('Failed to load user data:', error);
+            console.error('🔥 POPUP: Failed to load user data:', error);
+            console.error('🔥 POPUP: Error stack:', error instanceof Error ? error.stack : 'No stack trace');
             setState((prev) => ({ ...prev, isLoading: false }));
         }
     };
@@ -1741,15 +1798,34 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
             };
             // Save metrics to storage
             await _core_storage_index__WEBPACK_IMPORTED_MODULE_3__.ChromeStorageService.addMetrics(metricsData);
-            // Update UI state with new metrics
-            const newScore = Math.max(0, Math.min(100, 100 - (eyeMetrics.fatigueIndex * 100)));
+            // Calculate proper Eye Health score using EyeHealthScorer
+            const recentMetrics = [metricsData]; // Use current metrics for real-time calculation
+            const healthScore = _core_metrics_index__WEBPACK_IMPORTED_MODULE_5__.EyeHealthScorer.calculateScore(recentMetrics);
+            const newScore = healthScore.overall;
             const realtimeFatigueScore = Math.max(0, Math.min(100, 100 - (eyeMetrics.fatigueIndex * 100)));
             const newStatus = determineUserStatus(newScore, [eyeMetrics]);
             console.log(`🔥 [${timestamp}] POPUP: Score calculation:`);
             console.log(`  - fatigueIndex: ${eyeMetrics.fatigueIndex}`);
-            console.log(`  - newScore: ${newScore}`);
+            console.log(`  - Eye Health Score: ${newScore}`);
             console.log(`  - realtimeFatigueScore: ${realtimeFatigueScore}`);
-            console.log(`  - rounded score: ${Math.round(realtimeFatigueScore)}`);
+            console.log(`  - Health Score Details:`, healthScore);
+            console.log(`  - rounded Eye Health score: ${Math.round(newScore)}`);
+            // Generate AI recommendation based on current metrics
+            let aiRecommendation = 'Your eyes are healthy! Keep up the good work.';
+            let recommendedBreakType = _types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.MICRO;
+            if (eyeMetrics.fatigueIndex > 0.7) {
+                aiRecommendation = 'High eye strain detected! Take a 15-minute wellness break immediately.';
+                recommendedBreakType = _types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.LONG;
+            }
+            else if (eyeMetrics.fatigueIndex > 0.4) {
+                aiRecommendation = 'Moderate eye fatigue detected. A 5-minute guided relaxation break is recommended.';
+                recommendedBreakType = _types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.SHORT;
+            }
+            else if (eyeMetrics.blinkRate < 10) {
+                aiRecommendation = 'Low blink rate detected. Remember to blink more frequently!';
+                recommendedBreakType = _types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.MICRO;
+            }
+            // Single setState call to avoid race conditions
             setState(prev => ({
                 ...prev,
                 status: newStatus,
@@ -1757,31 +1833,11 @@ const Popup = ({ onStartBreak, onOpenSettings }) => {
                     ...prev.eyeScore,
                     current: Math.round(newScore)
                 },
-                realtimeScore: Math.round(realtimeFatigueScore)
+                realtimeScore: Math.round(realtimeFatigueScore),
+                aiRecommendation,
+                recommendedBreakType
             }));
             console.log(`🔥 [${timestamp}] POPUP: Updated realtimeScore:`, Math.round(realtimeFatigueScore));
-            // Generate AI recommendation based on current metrics
-            if (eyeMetrics.fatigueIndex > 0.7) {
-                setState(prev => ({
-                    ...prev,
-                    aiRecommendation: 'High eye strain detected! Take a 15-minute wellness break immediately.',
-                    recommendedBreakType: _types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.LONG
-                }));
-            }
-            else if (eyeMetrics.fatigueIndex > 0.4) {
-                setState(prev => ({
-                    ...prev,
-                    aiRecommendation: 'Moderate eye fatigue detected. Consider a 5-minute guided break.',
-                    recommendedBreakType: _types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.SHORT
-                }));
-            }
-            else if (eyeMetrics.blinkRate < 10) {
-                setState(prev => ({
-                    ...prev,
-                    aiRecommendation: 'Low blink rate detected. Remember to blink more frequently!',
-                    recommendedBreakType: _types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.MICRO
-                }));
-            }
         }
         catch (error) {
             console.error('Error handling eye metrics:', error);
@@ -2316,7 +2372,7 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
     return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.Fragment, { children: [state.showCameraPermissionPopup && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_CameraPermissionPopup__WEBPACK_IMPORTED_MODULE_6__["default"], { isVisible: state.showCameraPermissionPopup, onApprove: handleCameraPermissionApprove, onReject: handleCameraPermissionReject, onClose: () => setState(prev => ({ ...prev, showCameraPermissionPopup: false })) })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_LoginModal__WEBPACK_IMPORTED_MODULE_7__["default"], { isVisible: state.showLoginModal, onClose: () => setState(prev => ({ ...prev, showLoginModal: false })), onLogin: handleLogin, onSignup: handleSignup }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "w-[380px] h-[550px] bg-white overflow-hidden flex flex-col relative", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center justify-between mb-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center space-x-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-2xl", children: "\uD83D\uDC41\uFE0F" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("h1", { className: "text-lg font-bold", children: "EyeZen" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { className: "text-blue-100 text-xs opacity-90", children: "Eye Health Monitor" })] })] }), state.isLoggedIn ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center space-x-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "text-xs text-blue-100 opacity-90 truncate max-w-20", children: state.userEmail.split('@')[0] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: async () => {
                                                     await chrome.storage.local.remove(['eyezen_login_state']);
                                                     setState(prev => ({ ...prev, isLoggedIn: false, userEmail: '' }));
-                                                }, className: "p-1 hover:bg-white/20 rounded transition-colors", title: "Logout", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("svg", { className: "w-3 h-3", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" }) }) })] })) : ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: () => setState(prev => ({ ...prev, showLoginModal: true })), className: "p-2 hover:bg-white/20 rounded-lg transition-colors", title: "Login", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" }) }) }))] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center justify-between", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center space-x-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-lg", children: "\uD83D\uDCF9" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex-1", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "font-semibold text-sm", children: "Camera Monitoring" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs text-blue-100 opacity-90", children: state.cameraEnabled ? 'Active - Tracking eye health' : 'Inactive - Click to enable' }), !state.cameraEnabled && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: () => setState(prev => ({ ...prev, showCameraPermissionPopup: true })), className: "text-xs text-blue-200 hover:text-white underline mt-1 transition-colors", children: "Need help? View setup guide" })), state.cameraEnabled && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: downloadCurrentFrame, className: "text-xs text-blue-200 hover:text-white underline mt-1 transition-colors flex items-center space-x-1", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "\uD83D\uDCF8" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "Download Current Frame" })] }))] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: toggleCamera, className: `relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/50 ${state.cameraEnabled ? 'bg-green-500 shadow-lg' : 'bg-white/30'}`, children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: `inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 shadow-md ${state.cameraEnabled ? 'translate-x-6' : 'translate-x-1'}` }) })] }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "p-3 relative", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "absolute top-3 left-3 z-10", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "inline-flex items-center px-2 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs shadow-sm", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "w-2 h-2 bg-blue-500 rounded-full mr-1.5 animate-pulse" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "font-medium text-blue-700", children: state.realtimeScore >= 0 ? state.realtimeScore : '--' })] }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "text-center mb-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-3xl mb-1", children: getStatusIcon(state.status) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("h2", { className: `text-base font-bold ${getScoreColor(state.eyeScore.current)}`, children: ["Eye Health: ", state.eyeScore.current, "/100"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("p", { className: "text-xs text-gray-600", children: [state.streakDays, " day streak \u2022 ", formatLastBreakTime(state.lastBreakTime)] })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "px-4 pb-4 flex-1", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "mb-3 p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.MICRO), className: "w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-400 hover:to-emerald-400 transition-all duration-200 font-medium flex items-center justify-center space-x-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "\u26A1" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "Start Recommended Break with AI" })] }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("h3", { className: "font-semibold text-gray-700 mb-2", children: "Choose Your Break" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "grid grid-cols-3 gap-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.MICRO), className: "p-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors duration-200 text-center border border-blue-200", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xl mb-1", children: "\u26A1" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs font-medium", children: "Quick" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs opacity-70", children: "20 sec" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.SHORT), className: "p-3 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg transition-colors duration-200 text-center border border-green-200", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xl mb-1", children: "\uD83E\uDDD8" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs font-medium", children: "Eye Break" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs opacity-70", children: "5 min" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.LONG), className: "p-3 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg transition-colors duration-200 text-center border border-purple-200", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xl mb-1", children: "\uD83D\uDC86" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs font-medium", children: "Wellness" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs opacity-70", children: "15 min" })] })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: onOpenSettings, className: "w-full mt-7 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors", children: "View detailed dashboard \u2192" })] })] })] }));
+                                                }, className: "p-1 hover:bg-white/20 rounded transition-colors", title: "Logout", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("svg", { className: "w-3 h-3", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" }) }) })] })) : ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: () => setState(prev => ({ ...prev, showLoginModal: true })), className: "p-2 hover:bg-white/20 rounded-lg transition-colors", title: "Login", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" }) }) }))] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center justify-between", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center space-x-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-lg", children: "\uD83D\uDCF9" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex-1", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "font-semibold text-sm", children: "Camera Monitoring" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs text-blue-100 opacity-90", children: state.cameraEnabled ? 'Active - Tracking eye health' : 'Inactive - Click to enable' }), !state.cameraEnabled && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: () => setState(prev => ({ ...prev, showCameraPermissionPopup: true })), className: "text-xs text-blue-200 hover:text-white underline mt-1 transition-colors", children: "Need help? View setup guide" })), state.cameraEnabled && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: downloadCurrentFrame, className: "text-xs text-blue-200 hover:text-white underline mt-1 transition-colors flex items-center space-x-1", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "\uD83D\uDCF8" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "Download Current Frame" })] }))] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: toggleCamera, className: `relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/50 ${state.cameraEnabled ? 'bg-green-500 shadow-lg' : 'bg-white/30'}`, children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: `inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 shadow-md ${state.cameraEnabled ? 'translate-x-6' : 'translate-x-1'}` }) })] }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "p-3 relative", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-center mb-3", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-2 mx-1 mb-1 border border-gray-100 shadow-sm", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center justify-center mb-1", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "text-sm mr-1", children: state.eyeScore.current >= 80 ? '😊' : state.eyeScore.current >= 60 ? '😐' : state.eyeScore.current >= 40 ? '😟' : '😵' }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("h2", { className: "text-xs font-semibold text-gray-800", children: "Eye Health Score" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex items-center justify-center mb-1", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: `text-lg font-bold ${getScoreColor(state.eyeScore.current)}`, children: state.eyeScore.current }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "text-xs text-gray-500 ml-1", children: "/100" }), state.cameraEnabled && state.eyeScore.current === 50 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "ml-2 text-xs text-blue-600 font-medium flex items-center", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "animate-spin mr-1", children: "\uD83D\uDD04" }), "Analyzing..."] }))] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "w-full bg-gray-200 rounded-full h-1 mb-1", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: `h-1 rounded-full transition-all duration-500 ${getScoreColor(state.eyeScore.current).includes('green') ? 'bg-green-500' : getScoreColor(state.eyeScore.current).includes('yellow') ? 'bg-yellow-500' : 'bg-red-500'}`, style: { width: `${state.eyeScore.current}%` } }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "text-xs text-gray-600 leading-tight text-center", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "font-medium text-green-600 text-xs", children: "Higher is healthier" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs text-gray-400", children: "Based on eye strain, blink rate, posture, fatigue levels" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "mt-2", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.MICRO), className: "w-full px-2 py-1.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-md hover:from-green-400 hover:to-emerald-400 transition-all duration-200 font-medium flex items-center justify-center space-x-1 text-xs", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "\u26A1" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "Start Recommended Break with AI" })] }) })] }) }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "px-4 pb-4 flex-1", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("h3", { className: "font-semibold text-gray-700 mb-2", children: "Choose Your Break" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "grid grid-cols-3 gap-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.MICRO), className: "p-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors duration-200 text-center border border-blue-200", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xl mb-1", children: "\u26A1" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs font-medium", children: "Quick" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs opacity-70", children: "20 sec" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.SHORT), className: "p-3 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg transition-colors duration-200 text-center border border-green-200", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xl mb-1", children: "\uD83E\uDDD8" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs font-medium", children: "Eye Break" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs opacity-70", children: "5 min" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { onClick: () => handleBreakClick(_types_index__WEBPACK_IMPORTED_MODULE_2__.BreakType.LONG), className: "p-3 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg transition-colors duration-200 text-center border border-purple-200", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xl mb-1", children: "\uD83D\uDC86" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs font-medium", children: "Wellness" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "text-xs opacity-70", children: "15 min" })] })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: onOpenSettings, className: "w-full mt-7 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors", children: "View detailed dashboard \u2192" })] })] })] }));
 };
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (Popup);
 

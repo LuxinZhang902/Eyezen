@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Chrome Storage Contents</title>
+</head>
+<body>
+    <h1>Chrome Storage Debug</h1>
+    <div id="results"></div>
+    <button onclick="checkStorage()">Check Storage</button>
+    <button onclick="clearStorage()">Clear Storage</button>
+    
+    <script>
+        async function checkStorage() {
+            const resultsDiv = document.getElementById('results');
+            
+            try {
+                if (typeof chrome !== 'undefined' && chrome.storage) {
+                    // Get all storage data
+                    const result = await chrome.storage.local.get(null);
+                    console.log('All storage data:', result);
+                    
+                    // Check specifically for user data
+                    const userData = result.eyezen_user_data;
+                    console.log('User data:', userData);
+                    
+                    let html = '<h2>Storage Contents</h2>';
+                    
+                    if (userData) {
+                        html += `
+                            <h3>User Data Found</h3>
+                            <p><strong>Metrics count:</strong> ${userData.metrics ? userData.metrics.length : 'No metrics'}</p>
+                            <p><strong>Settings:</strong> ${JSON.stringify(userData.settings, null, 2)}</p>
+                            <p><strong>Recent metrics:</strong></p>
+                            <pre>${JSON.stringify(userData.metrics ? userData.metrics.slice(-3) : [], null, 2)}</pre>
+                        `;
+                    } else {
+                        html += '<p><strong>No user data found in storage</strong></p>';
+                    }
+                    
+                    html += `<h3>All Storage Keys</h3><pre>${JSON.stringify(Object.keys(result), null, 2)}</pre>`;
+                    
+                    resultsDiv.innerHTML = html;
+                } else {
+                    resultsDiv.innerHTML = '<p>Chrome storage API not available</p>';
+                }
+            } catch (error) {
+                console.error('Storage check error:', error);
+                resultsDiv.innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function clearStorage() {
+            try {
+                if (typeof chrome !== 'undefined' && chrome.storage) {
+                    await chrome.storage.local.clear();
+                    console.log('Storage cleared');
+                    document.getElementById('results').innerHTML = '<p>Storage cleared successfully</p>';
+                } else {
+                    document.getElementById('results').innerHTML = '<p>Chrome storage API not available</p>';
+                }
+            } catch (error) {
+                console.error('Storage clear error:', error);
+                document.getElementById('results').innerHTML = `<p>Clear error: ${error.message}</p>`;
+            }
+        }
+        
+        // Auto-check on load
+        window.onload = checkStorage;
+    </script>
+</body>
+</html>

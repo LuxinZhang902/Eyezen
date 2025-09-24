@@ -124,4 +124,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = MediaPipeWorkerLoader;
 } else {
   globalThis.MediaPipeWorkerLoader = MediaPipeWorkerLoader;
+  // Also expose the detectForVideo function globally for CV worker
+  globalThis.detectForVideo = detectForVideo;
+  globalThis.initializeMediaPipe = initializeMediaPipe;
 }

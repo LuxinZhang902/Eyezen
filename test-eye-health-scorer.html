@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eye Health Scorer Test</title>
+</head>
+<body>
+    <h1>Eye Health Scorer Test</h1>
+    <div id="results"></div>
+    
+    <script type="module">
+        // Import the EyeHealthScorer
+        import { EyeHealthScorer } from './core/metrics/index.ts';
+        
+        // Test with sample metrics
+        const testMetrics = [
+            {
+                timestamp: Date.now(),
+                blinkRate: 15,
+                fatigueIndex: 0.3,
+                posture: 'good',
+                earValue: 0.23,
+                perclosValue: 0.18
+            }
+        ];
+        
+        console.log('Testing EyeHealthScorer with sample metrics:', testMetrics);
+        
+        const healthScore = EyeHealthScorer.calculateScore(testMetrics);
+        
+        console.log('Calculated Eye Health Score:', healthScore);
+        
+        // Display results
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = `
+            <h2>Test Results:</h2>
+            <p><strong>Overall Score:</strong> ${healthScore.overall}/100</p>
+            <p><strong>Eye Strain:</strong> ${healthScore.components.eyeStrain}</p>
+            <p><strong>Blink Health:</strong> ${healthScore.components.blinkHealth}</p>
+            <p><strong>Posture Health:</strong> ${healthScore.components.postureHealth}</p>
+            <p><strong>Fatigue Level:</strong> ${healthScore.components.fatigueLevel}</p>
+            <p><strong>Trend:</strong> ${healthScore.trend}</p>
+            <p><strong>Recommendations:</strong></p>
+            <ul>
+                ${healthScore.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+            </ul>
+        `;
+        
+        // Test with empty metrics
+        const emptyScore = EyeHealthScorer.calculateScore([]);
+        console.log('Empty metrics score:', emptyScore);
+        
+        resultsDiv.innerHTML += `
+            <h2>Empty Metrics Test:</h2>
+            <p><strong>Overall Score:</strong> ${emptyScore.overall}/100</p>
+        `;
+    </script>
+</body>
+</html>

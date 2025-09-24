@@ -61,6 +61,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
   });
 
   useEffect(() => {
+    console.log('🔥 POPUP: useEffect triggered, calling loadUserData');
     loadUserData();
     loadLoginState();
     
@@ -151,6 +152,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
   };
 
   const loadUserData = async () => {
+    console.log('🔥 POPUP: loadUserData function called');
     try {
       let userData = await ChromeStorageService.getUserData();
       
@@ -163,7 +165,9 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       if (userData) {
         // Calculate current eye health score
         const recentMetrics = userData.metrics.slice(-10);
+        console.log('🔍 POPUP: Recent metrics for health score calculation:', recentMetrics.length, recentMetrics);
         const healthScore = EyeHealthScorer.calculateScore(recentMetrics);
+        console.log('🔍 POPUP: Calculated health score:', healthScore);
         
         // Determine user status based on score and recent metrics
         const currentStatus = determineUserStatus(healthScore.overall, recentMetrics);
@@ -201,6 +205,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
         // Camera should only be activated when user explicitly clicks the toggle
         (window as any).eyeZenCameraStream = null;
         
+        console.log('🔍 POPUP: Setting eyeScore.current to:', healthScore.overall);
         setState(prev => ({
           ...prev,
           status: currentStatus,
@@ -225,7 +230,8 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
         }));
       }
     } catch (error) {
-      console.error('Failed to load user data:', error);
+      console.error('🔥 POPUP: Failed to load user data:', error);
+      console.error('🔥 POPUP: Error stack:', error instanceof Error ? error.stack : 'No stack trace');
       setState((prev: PopupState) => ({ ...prev, isLoading: false }));
     }
   };
@@ -257,17 +263,36 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       // Save metrics to storage
       await ChromeStorageService.addMetrics(metricsData);
       
-      // Update UI state with new metrics
-      const newScore = Math.max(0, Math.min(100, 100 - (eyeMetrics.fatigueIndex * 100)));
+      // Calculate proper Eye Health score using EyeHealthScorer
+      const recentMetrics = [metricsData]; // Use current metrics for real-time calculation
+      const healthScore = EyeHealthScorer.calculateScore(recentMetrics);
+      const newScore = healthScore.overall;
       const realtimeFatigueScore = Math.max(0, Math.min(100, 100 - (eyeMetrics.fatigueIndex * 100)));
       const newStatus = determineUserStatus(newScore, [eyeMetrics]);
       
       console.log(`🔥 [${timestamp}] POPUP: Score calculation:`);
       console.log(`  - fatigueIndex: ${eyeMetrics.fatigueIndex}`);
-      console.log(`  - newScore: ${newScore}`);
+      console.log(`  - Eye Health Score: ${newScore}`);
       console.log(`  - realtimeFatigueScore: ${realtimeFatigueScore}`);
-      console.log(`  - rounded score: ${Math.round(realtimeFatigueScore)}`);
+      console.log(`  - Health Score Details:`, healthScore);
+      console.log(`  - rounded Eye Health score: ${Math.round(newScore)}`);
       
+      // Generate AI recommendation based on current metrics
+      let aiRecommendation = 'Your eyes are healthy! Keep up the good work.';
+      let recommendedBreakType = BreakType.MICRO;
+      
+      if (eyeMetrics.fatigueIndex > 0.7) {
+        aiRecommendation = 'High eye strain detected! Take a 15-minute wellness break immediately.';
+        recommendedBreakType = BreakType.LONG;
+      } else if (eyeMetrics.fatigueIndex > 0.4) {
+        aiRecommendation = 'Moderate eye fatigue detected. A 5-minute guided relaxation break is recommended.';
+        recommendedBreakType = BreakType.SHORT;
+      } else if (eyeMetrics.blinkRate < 10) {
+        aiRecommendation = 'Low blink rate detected. Remember to blink more frequently!';
+        recommendedBreakType = BreakType.MICRO;
+      }
+      
+      // Single setState call to avoid race conditions
       setState(prev => ({
         ...prev,
         status: newStatus,
@@ -275,31 +300,12 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
           ...prev.eyeScore,
           current: Math.round(newScore)
         },
-        realtimeScore: Math.round(realtimeFatigueScore)
+        realtimeScore: Math.round(realtimeFatigueScore),
+        aiRecommendation,
+        recommendedBreakType
       }));
       
       console.log(`🔥 [${timestamp}] POPUP: Updated realtimeScore:`, Math.round(realtimeFatigueScore));
-      
-      // Generate AI recommendation based on current metrics
-      if (eyeMetrics.fatigueIndex > 0.7) {
-        setState(prev => ({
-          ...prev,
-          aiRecommendation: 'High eye strain detected! Take a 15-minute wellness break immediately.',
-          recommendedBreakType: BreakType.LONG
-        }));
-      } else if (eyeMetrics.fatigueIndex > 0.4) {
-        setState(prev => ({
-          ...prev,
-          aiRecommendation: 'Moderate eye fatigue detected. Consider a 5-minute guided break.',
-          recommendedBreakType: BreakType.SHORT
-        }));
-      } else if (eyeMetrics.blinkRate < 10) {
-        setState(prev => ({
-          ...prev,
-          aiRecommendation: 'Low blink rate detected. Remember to blink more frequently!',
-          recommendedBreakType: BreakType.MICRO
-        }));
-      }
       
     } catch (error) {
       console.error('Error handling eye metrics:', error);
@@ -1027,39 +1033,67 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
       {/* Simplified Status */}
       <div className="p-3 relative">
         {/* Real-time Score Display - Upper Left in White Space */}
-        <div className="absolute top-3 left-3 z-10">
+        {/* <div className="absolute top-3 left-3 z-10">
           <div className="inline-flex items-center px-2 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs shadow-sm">
             <div className="w-2 h-2 bg-blue-500 rounded-full mr-1.5 animate-pulse"></div>
             <span className="font-medium text-blue-700">
               {state.realtimeScore >= 0 ? state.realtimeScore : '--'}
             </span>
           </div>
-        </div>
+        </div> */}
         <div className="text-center mb-3">
-          <div className="text-3xl mb-1">{getStatusIcon(state.status)}</div>
-          
-          {/* Eye Health Score */}
-          <h2 className={`text-base font-bold ${getScoreColor(state.eyeScore.current)}`}>
-            Eye Health: {state.eyeScore.current}/100
-          </h2>
-          <p className="text-xs text-gray-600">
-            {state.streakDays} day streak • {formatLastBreakTime(state.lastBreakTime)}
-          </p>
+          {/* Eye Health Score Card */}
+          <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-2 mx-1 mb-1 border border-gray-100 shadow-sm">
+            <div className="flex items-center justify-center mb-1">
+              <span className="text-sm mr-1">
+                {state.eyeScore.current >= 80 ? '😊' : state.eyeScore.current >= 60 ? '😐' : state.eyeScore.current >= 40 ? '😟' : '😵'}
+              </span>
+              <h2 className="text-xs font-semibold text-gray-800">
+                Eye Health Score
+              </h2>
+            </div>
+            
+            <div className="flex items-center justify-center mb-1">
+              <span className={`text-lg font-bold ${getScoreColor(state.eyeScore.current)}`}>
+                {state.eyeScore.current}
+              </span>
+              <span className="text-xs text-gray-500 ml-1">/100</span>
+              {state.cameraEnabled && state.eyeScore.current === 50 && (
+                <span className="ml-2 text-xs text-blue-600 font-medium flex items-center">
+                  <span className="animate-spin mr-1">🔄</span>
+                  Analyzing...
+                </span>
+              )}
+            </div>
+            
+            <div className="w-full bg-gray-200 rounded-full h-1 mb-1">
+              <div 
+                className={`h-1 rounded-full transition-all duration-500 ${getScoreColor(state.eyeScore.current).includes('green') ? 'bg-green-500' : getScoreColor(state.eyeScore.current).includes('yellow') ? 'bg-yellow-500' : 'bg-red-500'}`}
+                style={{ width: `${state.eyeScore.current}%` }}
+              ></div>
+            </div>
+            
+            <div className="text-xs text-gray-600 leading-tight text-center">
+              <div className="font-medium text-green-600 text-xs">Higher is healthier</div>
+              <div className="text-xs text-gray-400">Based on eye strain, blink rate, posture, fatigue levels</div>
+            </div>
+            
+            {/* AI Break Button integrated into Eye Health Score section */}
+            <div className="mt-2">
+              <button
+                onClick={() => handleBreakClick(BreakType.MICRO)}
+                className="w-full px-2 py-1.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-md hover:from-green-400 hover:to-emerald-400 transition-all duration-200 font-medium flex items-center justify-center space-x-1 text-xs"
+              >
+                <span>⚡</span>
+                <span>Start Recommended Break with AI</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* AI Break Suggestion */}
+      {/* Break Selection */}
       <div className="px-4 pb-4 flex-1">
-        {/* AI Coach Recommendation */}
-        <div className="mb-3 p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
-          <button
-            onClick={() => handleBreakClick(BreakType.MICRO)}
-            className="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-400 hover:to-emerald-400 transition-all duration-200 font-medium flex items-center justify-center space-x-2"
-          >
-            <span>⚡</span>
-            <span>Start Recommended Break with AI</span>
-          </button>
-        </div>
         
         {/* Break Selection */}
         <div>

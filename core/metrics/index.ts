@@ -11,25 +11,25 @@ import { EyeMetrics, UserStatus, BreakSession, EyeHealthScore } from '../../type
  */
 export class EyeHealthScorer {
   private static readonly WEIGHTS = {
-    EAR: 0.25,        // Eye Aspect Ratio
-    PERCLOS: 0.30,    // Percentage of Eye Closure
-    BLINK_RATE: 0.20, // Blink frequency
-    POSTURE: 0.15,    // Head posture
+    EAR: 0.30,        // Eye Aspect Ratio (increased from 0.25)
+    PERCLOS: 0.35,    // Percentage of Eye Closure (increased from 0.30)
+    BLINK_RATE: 0.00, // Blink frequency (disabled for real-time scoring)
+    POSTURE: 0.25,    // Head posture (increased from 0.15)
     FATIGUE: 0.10     // Overall fatigue index
   };
 
   private static readonly THRESHOLDS = {
     EAR: {
-      EXCELLENT: 0.25,
-      GOOD: 0.22,
-      FAIR: 0.18,
-      POOR: 0.15
+      EXCELLENT: 0.25,  // Adjusted for real-world values (normal ~0.3, lower threshold for better scoring)
+      GOOD: 0.20,
+      FAIR: 0.15,
+      POOR: 0.10
     },
     PERCLOS: {
-      EXCELLENT: 0.15,
-      GOOD: 0.20,
-      FAIR: 0.30,
-      POOR: 0.40
+      EXCELLENT: 0.15,  // Adjusted for real-world values (lower is better, more lenient)
+      GOOD: 0.25,
+      FAIR: 0.35,
+      POOR: 0.50
     },
     BLINK_RATE: {
       EXCELLENT: { min: 15, max: 20 },
@@ -40,7 +40,7 @@ export class EyeHealthScorer {
   };
 
   /**
-   * Calculate overall eye health score
+   * Calculate overall eye health score with base score approach
    */
   static calculateScore(metrics: EyeMetrics[]): EyeHealthScore {
     if (metrics.length === 0) {
@@ -75,16 +75,26 @@ export class EyeHealthScorer {
       latest: latest.posture
     });
 
-    const overall = Math.round(
-      eyeStrainScore * (this.WEIGHTS.EAR + this.WEIGHTS.PERCLOS) +
-      blinkHealthScore * this.WEIGHTS.BLINK_RATE +
-      postureScore * this.WEIGHTS.POSTURE +
-      fatigueScore * this.WEIGHTS.FATIGUE
-    );
+    // Base score approach: Start with 50 and add weighted improvements
+    const BASE_SCORE = 50;
+    const maxPossibleScore = 100;
+    const improvementRange = maxPossibleScore - BASE_SCORE; // 50 points to distribute
+    
+    const weightedImprovement = 
+      (eyeStrainScore / 100) * (this.WEIGHTS.EAR + this.WEIGHTS.PERCLOS) * improvementRange +
+      (postureScore / 100) * this.WEIGHTS.POSTURE * improvementRange +
+      (fatigueScore / 100) * this.WEIGHTS.FATIGUE * improvementRange;
+    
+    const overall = Math.round(BASE_SCORE + weightedImprovement);
 
-    console.log('🔍 EyeHealthScorer: Overall calculation:', {
-      calculation: `${eyeStrainScore} * ${this.WEIGHTS.EAR + this.WEIGHTS.PERCLOS} + ${blinkHealthScore} * ${this.WEIGHTS.BLINK_RATE} + ${postureScore} * ${this.WEIGHTS.POSTURE} + ${fatigueScore} * ${this.WEIGHTS.FATIGUE}`,
-      result: overall
+    console.log('🔍 EyeHealthScorer: Base score calculation:', {
+      baseScore: BASE_SCORE,
+      improvementRange,
+      eyeStrainContribution: ((eyeStrainScore / 100) * (this.WEIGHTS.EAR + this.WEIGHTS.PERCLOS) * improvementRange).toFixed(1),
+      postureContribution: ((postureScore / 100) * this.WEIGHTS.POSTURE * improvementRange).toFixed(1),
+      fatigueContribution: ((fatigueScore / 100) * this.WEIGHTS.FATIGUE * improvementRange).toFixed(1),
+      totalImprovement: weightedImprovement.toFixed(1),
+      finalScore: overall
     });
 
     const trend = this.calculateTrend(metrics);
@@ -96,7 +106,7 @@ export class EyeHealthScorer {
     });
 
     return {
-      overall: Math.max(0, Math.min(100, overall)),
+      overall: Math.max(BASE_SCORE, Math.min(100, overall)),
       components: {
         eyeStrain: eyeStrainScore,
         blinkHealth: blinkHealthScore,

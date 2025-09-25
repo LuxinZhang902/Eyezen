@@ -307,36 +307,39 @@ class CVWorker {
       posture
     });
     
-    // Normalize metrics to 0-100 scale
+    // Normalize metrics to 0-100 scale (lower fatigue score = better health)
     let fatigueScore = 0;
     
-    // EAR contribution (lower EAR = more fatigue)
+    // EAR contribution (lower EAR = more fatigue) - made less punitive
     const normalEAR = 0.3; // Typical EAR for alert state
-    const earScore = Math.max(0, (normalEAR - ear) / normalEAR * 40);
+    const earDeviation = Math.max(0, normalEAR - ear);
+    const earScore = Math.min(25, (earDeviation / normalEAR) * 25); // Reduced from 40 to 25
     fatigueScore += earScore;
     console.log('📊 EAR Score:', earScore.toFixed(1), '(EAR:', ear.toFixed(3), 'vs normal:', normalEAR, ')');
     
-    // PERCLOS contribution (higher PERCLOS = more fatigue)
-    const perclosScore = Math.min(40, perclos * 2); // Cap at 40 points
+    // PERCLOS contribution (higher PERCLOS = more fatigue) - made less punitive
+    const perclosScore = Math.min(25, perclos * 100); // Reduced impact and cap at 25
     fatigueScore += perclosScore;
     console.log('📊 PERCLOS Score:', perclosScore.toFixed(1), '(PERCLOS:', perclos.toFixed(3), '%)');
     
-    // Blink rate contribution
-    const normalBlinkRate = 15; // Normal blinks per minute
+    // Blink rate contribution - made less punitive
+    const normalBlinkRate = 17.5; // Optimal blinks per minute (middle of 15-20 range)
     const blinkRateDeviation = Math.abs(blinkRate - normalBlinkRate);
-    const blinkScore = Math.min(10, blinkRateDeviation / 2);
+    const blinkScore = Math.min(15, blinkRateDeviation / 3); // Reduced impact
     fatigueScore += blinkScore;
     console.log('📊 Blink Score:', blinkScore.toFixed(1), '(Rate:', blinkRate.toFixed(1), 'vs normal:', normalBlinkRate, ')');
     
-    // Posture contribution
+    // Posture contribution - made less punitive
     const postureScore = posture === PostureStatus.GOOD ? 0 : 
-                        posture === PostureStatus.FORWARD ? 8 :
-                        posture === PostureStatus.TILTED ? 5 : 10;
+                        posture === PostureStatus.FORWARD ? 5 :  // Reduced from 8
+                        posture === PostureStatus.TILTED ? 3 :   // Reduced from 5
+                        7; // Reduced from 10
     fatigueScore += postureScore;
     console.log('📊 Posture Score:', postureScore, '(Status:', posture, ')');
     
-    const finalScore = Math.min(100, Math.max(0, fatigueScore));
-    console.log('🎯 Final Fatigue Index:', finalScore.toFixed(1), '/ 100');
+    // Cap the final score at a more reasonable level
+    const finalScore = Math.min(70, Math.max(0, fatigueScore)); // Reduced max from 100 to 70
+    console.log('🎯 Final Fatigue Index:', finalScore.toFixed(1), '/ 70 (capped)');
     
     return finalScore;
   }

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Extension Values</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .debug-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .value-display {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .metric {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #007bff;
+        }
+        .metric-label {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .metric-value {
+            font-size: 1.2em;
+            color: #007bff;
+        }
+        .threshold-info {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+        .score-breakdown {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        .instructions {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Extension Values Debug Tool</h1>
+    
+    <div class="instructions">
+        <h3>📋 Instructions:</h3>
+        <ol>
+            <li><strong>Open Chrome Extension:</strong> Click the EyeZen extension icon</li>
+            <li><strong>Allow Camera:</strong> Grant camera permissions if prompted</li>
+            <li><strong>Check Values:</strong> Click "Get Extension Data" below to see what values the extension is detecting</li>
+            <li><strong>Compare:</strong> Compare these values with the thresholds to understand scoring</li>
+        </ol>
+    </div>
+
+    <div class="debug-panel">
+        <h2>🎯 Current Extension Values</h2>
+        <button onclick="getExtensionData()">Get Extension Data</button>
+        <button onclick="clearStorage()">Clear Extension Storage</button>
+        <button onclick="clearLog()">Clear Log</button>
+        
+        <div class="value-display" id="values">
+            <div class="metric">
+                <div class="metric-label">EAR (Eye Aspect Ratio)</div>
+                <div class="metric-value" id="ear-value">--</div>
+                <div class="threshold-info">
+                    Excellent: ≥0.25 | Good: ≥0.20 | Fair: ≥0.15 | Poor: <0.15
+                </div>
+            </div>
+            
+            <div class="metric">
+                <div class="metric-label">PERCLOS (% Eye Closure)</div>
+                <div class="metric-value" id="perclos-value">--</div>
+                <div class="threshold-info">
+                    Excellent: ≤0.15 | Good: ≤0.25 | Fair: ≤0.35 | Poor: >0.35
+                </div>
+            </div>
+            
+            <div class="metric">
+                <div class="metric-label">Blink Rate</div>
+                <div class="metric-value" id="blink-value">--</div>
+                <div class="threshold-info">
+                    Weight: 0% (DISABLED)
+                </div>
+            </div>
+            
+            <div class="metric">
+                <div class="metric-label">Posture</div>
+                <div class="metric-value" id="posture-value">--</div>
+                <div class="threshold-info">
+                    Weight: 25%
+                </div>
+            </div>
+        </div>
+        
+        <div class="score-breakdown" id="score-breakdown">
+            <h3>📊 Score Breakdown</h3>
+            <div id="score-details">Click "Get Extension Data" to see score calculation</div>
+        </div>
+        
+        <div class="log" id="debug-log">Debug log will appear here...</div>
+    </div>
+
+    <script>
+        function log(message) {
+            const logElement = document.getElementById('debug-log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.innerHTML += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('debug-log').innerHTML = 'Debug log cleared...\n';
+        }
+        
+        async function getExtensionData() {
+            try {
+                log('🔍 Attempting to get extension data...');
+                
+                // Try to get data from Chrome storage
+                if (typeof chrome !== 'undefined' && chrome.storage) {
+                    chrome.storage.local.get(null, (data) => {
+                        log('📦 Chrome storage data: ' + JSON.stringify(data, null, 2));
+                        displayExtensionData(data);
+                    });
+                } else {
+                    log('❌ Chrome storage not available - this page needs to be opened from the extension context');
+                    
+                    // Alternative: Try to access extension data through messaging
+                    if (typeof chrome !== 'undefined' && chrome.runtime) {
+                        chrome.runtime.sendMessage({action: 'getMetrics'}, (response) => {
+                            if (response) {
+                                log('📦 Extension metrics: ' + JSON.stringify(response, null, 2));
+                                displayExtensionData(response);
+                            } else {
+                                log('❌ No response from extension');
+                            }
+                        });
+                    } else {
+                        log('❌ Chrome runtime not available');
+                        showManualInstructions();
+                    }
+                }
+            } catch (error) {
+                log('❌ Error getting extension data: ' + error.message);
+                showManualInstructions();
+            }
+        }
+        
+        function displayExtensionData(data) {
+            try {
+                // Look for recent metrics
+                const metrics = data.eyeMetrics || data.metrics || [];
+                const latest = metrics[metrics.length - 1];
+                
+                if (latest) {
+                    document.getElementById('ear-value').textContent = latest.earValue?.toFixed(3) || '--';
+                    document.getElementById('perclos-value').textContent = latest.perclosValue?.toFixed(3) || '--';
+                    document.getElementById('blink-value').textContent = latest.blinkRate?.toFixed(1) || '--';
+                    document.getElementById('posture-value').textContent = latest.posture || '--';
+                    
+                    // Calculate and show score breakdown
+                    calculateScoreBreakdown(latest);
+                    
+                    log('✅ Successfully displayed extension data');
+                } else {
+                    log('⚠️ No recent metrics found in extension data');
+                    document.getElementById('score-details').innerHTML = 'No recent metrics found. Make sure the extension is running and detecting your face.';
+                }
+            } catch (error) {
+                log('❌ Error displaying data: ' + error.message);
+            }
+        }
+        
+        function calculateScoreBreakdown(metrics) {
+            const thresholds = {
+                EAR: { EXCELLENT: 0.25, GOOD: 0.20, FAIR: 0.15, POOR: 0.10 },
+                PERCLOS: { EXCELLENT: 0.15, GOOD: 0.25, FAIR: 0.35, POOR: 0.50 }
+            };
+            
+            const weights = {
+                EAR: 0.30,
+                PERCLOS: 0.35,
+                BLINK_RATE: 0.00,
+                POSTURE: 0.25,
+                FATIGUE: 0.10
+            };
+            
+            // Calculate EAR score
+            const earScore = scoreByThreshold(metrics.earValue, thresholds.EAR, true);
+            const perclosScore = scoreByThreshold(metrics.perclosValue, thresholds.PERCLOS, false);
+            const eyeStrainScore = Math.round((earScore + perclosScore) / 2);
+            
+            // Calculate posture score (simplified)
+            const postureScore = getPostureScore(metrics.posture);
+            
+            // Calculate fatigue score
+            const fatigueScore = Math.max(0, Math.min(100, 100 - metrics.fatigueIndex));
+            
+            // Calculate overall score
+            const overall = Math.round(
+                eyeStrainScore * (weights.EAR + weights.PERCLOS) +
+                postureScore * weights.POSTURE +
+                fatigueScore * weights.FATIGUE
+            );
+            
+            const breakdown = `
+                <strong>Component Scores:</strong><br>
+                • EAR Score: ${earScore}/100 (value: ${metrics.earValue?.toFixed(3)})<br>
+                • PERCLOS Score: ${perclosScore}/100 (value: ${metrics.perclosValue?.toFixed(3)})<br>
+                • Eye Strain Score: ${eyeStrainScore}/100 (avg of EAR + PERCLOS)<br>
+                • Posture Score: ${postureScore}/100 (${metrics.posture})<br>
+                • Fatigue Score: ${fatigueScore}/100 (fatigue: ${metrics.fatigueIndex?.toFixed(1)})<br><br>
+                <strong>Weighted Calculation:</strong><br>
+                ${eyeStrainScore} × ${weights.EAR + weights.PERCLOS} + ${postureScore} × ${weights.POSTURE} + ${fatigueScore} × ${weights.FATIGUE}<br>
+                = <strong>${overall}/100</strong>
+            `;
+            
+            document.getElementById('score-details').innerHTML = breakdown;
+            
+            log(`📊 Score breakdown calculated: Overall=${overall}`);
+        }
+        
+        function scoreByThreshold(value, thresholds, higherIsBetter) {
+            if (higherIsBetter) {
+                if (value >= thresholds.EXCELLENT) return 95;
+                if (value >= thresholds.GOOD) return 80;
+                if (value >= thresholds.FAIR) return 60;
+                return 30;
+            } else {
+                if (value <= thresholds.EXCELLENT) return 95;
+                if (value <= thresholds.GOOD) return 80;
+                if (value <= thresholds.FAIR) return 60;
+                return 30;
+            }
+        }
+        
+        function getPostureScore(posture) {
+            switch (posture) {
+                case 'excellent': return 95;
+                case 'good': return 80;
+                case 'fair': return 60;
+                case 'poor': return 40;
+                case 'very_poor': return 20;
+                default: return 50;
+            }
+        }
+        
+        function clearStorage() {
+            if (typeof chrome !== 'undefined' && chrome.storage) {
+                chrome.storage.local.clear(() => {
+                    log('🗑️ Extension storage cleared');
+                });
+            } else {
+                log('❌ Cannot clear storage - Chrome API not available');
+            }
+        }
+        
+        function showManualInstructions() {
+            document.getElementById('score-details').innerHTML = `
+                <strong>⚠️ Cannot access extension data directly</strong><br><br>
+                <strong>Manual Debug Steps:</strong><br>
+                1. Open Chrome DevTools (F12)<br>
+                2. Go to the Extension popup<br>
+                3. In Console, run: <code>chrome.storage.local.get(null, console.log)</code><br>
+                4. Look for recent eyeMetrics values<br>
+                5. Compare EAR and PERCLOS values with thresholds above
+            `;
+        }
+        
+        // Initialize
+        log('🚀 Debug tool initialized');
+        log('💡 Click "Get Extension Data" to start debugging');
+    </script>
+</body>
+</html>

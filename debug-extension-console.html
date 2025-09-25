@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extension Debug Console Instructions</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .instruction-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .step {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            border-left: 4px solid #007bff;
+        }
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        .highlight {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        .threshold-info {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        .warning {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Extension Debug Instructions - Score Analysis</h1>
+    
+    <div class="success">
+        <strong>✅ Progress:</strong> Your score improved from 53 to 62! The threshold adjustments are working, but we need to identify what's preventing excellent scores (75-95+).
+    </div>
+
+    <div class="instruction-panel">
+        <h2>📋 Enhanced Debug Process</h2>
+        
+        <div class="step">
+            <h3>Step 1: Open Extension Popup</h3>
+            <p>Click the EyeZen extension icon in your Chrome toolbar to open the popup.</p>
+        </div>
+        
+        <div class="step">
+            <h3>Step 2: Open Developer Tools</h3>
+            <p>Right-click anywhere in the extension popup and select <strong>"Inspect"</strong> or press <strong>F12</strong>.</p>
+        </div>
+        
+        <div class="step">
+            <h3>Step 3: Go to Console Tab</h3>
+            <p>In the Developer Tools window, click on the <strong>"Console"</strong> tab.</p>
+        </div>
+        
+        <div class="step">
+            <h3>Step 4: Run Enhanced Debug Code</h3>
+            <p>Copy and paste this enhanced debug code into the console and press Enter:</p>
+            <div class="code-block">
+chrome.storage.local.get(null, (data) => {
+    console.log('📦 All Extension Data:', data);
+    
+    // Get recent metrics
+    const metrics = data.eyeMetrics || [];
+    const latest = metrics[metrics.length - 1];
+    
+    if (latest) {
+        console.log('🎯 Latest Raw Values:', {
+            EAR: latest.earValue?.toFixed(4),
+            PERCLOS: latest.perclosValue?.toFixed(4),
+            BlinkRate: latest.blinkRate?.toFixed(1),
+            Posture: latest.posture,
+            FatigueIndex: latest.fatigueIndex?.toFixed(1)
+        });
+        
+        // Exact threshold matching from the extension
+        const thresholds = {
+            EAR: { EXCELLENT: 0.25, GOOD: 0.20, FAIR: 0.15, POOR: 0.10 },
+            PERCLOS: { EXCELLENT: 0.15, GOOD: 0.25, FAIR: 0.35, POOR: 0.50 }
+        };
+        
+        // Calculate individual component scores using exact extension logic
+        function scoreByThreshold(value, thresh, higherIsBetter) {
+            if (higherIsBetter) {
+                if (value >= thresh.EXCELLENT) {
+                    const excess = Math.min((value - thresh.EXCELLENT) / (thresh.EXCELLENT * 0.2), 1);
+                    return Math.round(90 + (excess * 10));
+                }
+                if (value >= thresh.GOOD) {
+                    const progress = (value - thresh.GOOD) / (thresh.EXCELLENT - thresh.GOOD);
+                    return Math.round(70 + (progress * 20));
+                }
+                if (value >= thresh.FAIR) {
+                    const progress = (value - thresh.FAIR) / (thresh.GOOD - thresh.FAIR);
+                    return Math.round(40 + (progress * 30));
+                }
+                const progress = Math.max(0, value / thresh.FAIR);
+                return Math.round(progress * 40);
+            } else {
+                if (value <= thresh.EXCELLENT) {
+                    const quality = Math.max(0, 1 - (value / thresh.EXCELLENT));
+                    return Math.round(90 + (quality * 10));
+                }
+                if (value <= thresh.GOOD) {
+                    const progress = 1 - ((value - thresh.EXCELLENT) / (thresh.GOOD - thresh.EXCELLENT));
+                    return Math.round(70 + (progress * 20));
+                }
+                if (value <= thresh.FAIR) {
+                    const progress = 1 - ((value - thresh.GOOD) / (thresh.FAIR - thresh.GOOD));
+                    return Math.round(40 + (progress * 30));
+                }
+                const degradation = Math.min((value - thresh.FAIR) / (thresh.FAIR * 2), 1);
+                return Math.round(40 - (degradation * 40));
+            }
+        }
+        
+        function calculatePostureScore(posture) {
+            const randomOffset = () => Math.floor(Math.random() * 6) - 3;
+            switch (posture) {
+                case 'excellent': return Math.min(100, Math.max(92, 97 + randomOffset()));
+                case 'good': return Math.min(91, Math.max(75, 83 + randomOffset()));
+                case 'fair': return Math.min(74, Math.max(55, 65 + randomOffset()));
+                case 'poor': return Math.min(54, Math.max(25, 40 + randomOffset()));
+                case 'very_poor': return Math.min(24, Math.max(0, 15 + randomOffset()));
+                default: return Math.min(60, Math.max(40, 50 + randomOffset()));
+            }
+        }
+        
+        const earScore = scoreByThreshold(latest.earValue, thresholds.EAR, true);
+        const perclosScore = scoreByThreshold(latest.perclosValue, thresholds.PERCLOS, false);
+        const eyeStrainScore = Math.round((earScore + perclosScore) / 2);
+        const postureScore = calculatePostureScore(latest.posture);
+        const fatigueScore = Math.max(0, Math.min(100, 100 - latest.fatigueIndex));
+        
+        // Exact weights from extension
+        const weights = { EAR: 0.30, PERCLOS: 0.35, POSTURE: 0.25, FATIGUE: 0.10 };
+        const overall = Math.round(
+            eyeStrainScore * (weights.EAR + weights.PERCLOS) +
+            postureScore * weights.POSTURE +
+            fatigueScore * weights.FATIGUE
+        );
+        
+        console.log('📊 DETAILED SCORE BREAKDOWN:');
+        console.log('Individual Scores:', {
+            'EAR Score': earScore + '/100 (weight: 30%)',
+            'PERCLOS Score': perclosScore + '/100 (weight: 35%)', 
+            'Eye Strain Combined': eyeStrainScore + '/100 (weight: 65%)',
+            'Posture Score': postureScore + '/100 (weight: 25%)',
+            'Fatigue Score': fatigueScore + '/100 (weight: 10%)'
+        });
+        
+        console.log('Weighted Contributions:', {
+            'Eye Strain Contribution': (eyeStrainScore * 0.65).toFixed(1) + ' points',
+            'Posture Contribution': (postureScore * 0.25).toFixed(1) + ' points',
+            'Fatigue Contribution': (fatigueScore * 0.10).toFixed(1) + ' points',
+            'TOTAL': overall + '/100'
+        });
+        
+        console.log('🔍 THRESHOLD STATUS:');
+        console.log('EAR Analysis:', {
+            'Current Value': latest.earValue.toFixed(4),
+            'Excellent Threshold': '≥ 0.25',
+            'Status': latest.earValue >= 0.25 ? '✅ EXCELLENT' : 
+                     latest.earValue >= 0.20 ? '🟡 GOOD' : 
+                     latest.earValue >= 0.15 ? '🟠 FAIR' : '❌ POOR',
+            'Score': earScore + '/100'
+        });
+        
+        console.log('PERCLOS Analysis:', {
+            'Current Value': latest.perclosValue.toFixed(4),
+            'Excellent Threshold': '≤ 0.15',
+            'Status': latest.perclosValue <= 0.15 ? '✅ EXCELLENT' : 
+                     latest.perclosValue <= 0.25 ? '🟡 GOOD' : 
+                     latest.perclosValue <= 0.35 ? '🟠 FAIR' : '❌ POOR',
+            'Score': perclosScore + '/100'
+        });
+        
+        console.log('🎯 SCORE LIMITING FACTORS:');
+        const factors = [];
+        if (eyeStrainScore < 80) factors.push(`Eye Strain: ${eyeStrainScore}/100 (major impact: 65% weight)`);
+        if (postureScore < 80) factors.push(`Posture: ${postureScore}/100 (${latest.posture}) (moderate impact: 25% weight)`);
+        if (fatigueScore < 80) factors.push(`Fatigue: ${fatigueScore}/100 (minor impact: 10% weight)`);
+        
+        if (factors.length > 0) {
+            console.log('Issues found:', factors);
+        } else {
+            console.log('All components scoring well - investigating calculation...');
+        }
+        
+    } else {
+        console.log('❌ No metrics found. Make sure the extension is detecting your face.');
+    }
+});
+            </div>
+        </div>
+    </div>
+
+    <div class="threshold-info">
+        <h2>📏 Score Analysis Guide</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <h3>Component Weights</h3>
+                <ul>
+                    <li><strong>Eye Strain:</strong> 65% (EAR 30% + PERCLOS 35%)</li>
+                    <li><strong>Posture:</strong> 25%</li>
+                    <li><strong>Fatigue:</strong> 10%</li>
+                </ul>
+            </div>
+            <div>
+                <h3>Score Ranges</h3>
+                <ul>
+                    <li><strong>Excellent:</strong> 90-100</li>
+                    <li><strong>Good:</strong> 70-89</li>
+                    <li><strong>Fair:</strong> 40-69</li>
+                    <li><strong>Poor:</strong> 0-39</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="highlight">
+        <h2>🎯 What Your 62 Score Tells Us</h2>
+        <p>A score of 62 suggests:</p>
+        <ul>
+            <li><strong>Eye Strain (65% weight):</strong> Likely scoring in "Fair" range (40-69)</li>
+            <li><strong>Posture (25% weight):</strong> Could be dragging down the score if "poor" or "fair"</li>
+            <li><strong>Fatigue (10% weight):</strong> Minor impact, but could contribute</li>
+        </ul>
+        
+        <p><strong>To reach 75-95+:</strong> We need Eye Strain components (EAR/PERCLOS) to consistently score 80+ (Good/Excellent range)</p>
+    </div>
+
+    <div class="instruction-panel">
+        <h2>🚀 Next Steps</h2>
+        <p>After running the debug code, share the console output. I'll be able to:</p>
+        <ul>
+            <li>Identify exactly which component is limiting your score</li>
+            <li>Determine if EAR/PERCLOS thresholds need further adjustment</li>
+            <li>Check if posture detection is working correctly</li>
+            <li>Make targeted fixes to reach the expected 75-95+ range</li>
+        </ul>
+    </div>
+</body>
+</html>

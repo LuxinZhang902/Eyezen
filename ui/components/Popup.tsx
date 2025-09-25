@@ -1043,46 +1043,46 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
         </div> */}
         <div className="text-center mb-3">
           {/* Eye Health Score Card */}
-          <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-2 mx-1 mb-1 border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-center mb-1">
-              <span className="text-sm mr-1">
-                {state.eyeScore.current >= 80 ? '😊' : state.eyeScore.current >= 60 ? '😐' : state.eyeScore.current >= 40 ? '😟' : '😵'}
-              </span>
-              <h2 className="text-xs font-semibold text-gray-800">
-                Eye Health Score
-              </h2>
-            </div>
-            
-            <div className="flex items-center justify-center mb-1">
-              <span className={`text-lg font-bold ${getScoreColor(state.eyeScore.current)}`}>
-                {state.eyeScore.current}
-              </span>
-              <span className="text-xs text-gray-500 ml-1">/100</span>
-              {state.cameraEnabled && state.eyeScore.current === 50 && (
-                <span className="ml-2 text-xs text-blue-600 font-medium flex items-center">
-                  <span className="animate-spin mr-1">🔄</span>
-                  Analyzing...
+          <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-3 mx-1 mb-2 border border-gray-100 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center">
+                <span className="text-lg mr-2">
+                  {state.eyeScore.current >= 80 ? '😊' : state.eyeScore.current >= 60 ? '😐' : state.eyeScore.current >= 40 ? '😟' : '😵'}
                 </span>
-              )}
+                <h2 className="text-sm font-semibold text-gray-800">
+                  Eye Health Score
+                </h2>
+              </div>
+              <div className="flex items-center">
+                <span className={`text-xl font-bold ${getScoreColor(state.eyeScore.current)}`}>
+                  {state.eyeScore.current}
+                </span>
+                <span className="text-sm text-gray-500 ml-1">/100</span>
+                {state.cameraEnabled && state.eyeScore.current === 50 && (
+                  <span className="ml-2 text-xs text-blue-600 font-medium flex items-center">
+                    <span className="animate-spin mr-1">🔄</span>
+                    Analyzing...
+                  </span>
+                )}
+              </div>
             </div>
             
-            <div className="w-full bg-gray-200 rounded-full h-1 mb-1">
+            <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
               <div 
-                className={`h-1 rounded-full transition-all duration-500 ${getScoreColor(state.eyeScore.current).includes('green') ? 'bg-green-500' : getScoreColor(state.eyeScore.current).includes('yellow') ? 'bg-yellow-500' : 'bg-red-500'}`}
+                className={`h-1.5 rounded-full transition-all duration-500 ${getScoreColor(state.eyeScore.current).includes('green') ? 'bg-green-500' : getScoreColor(state.eyeScore.current).includes('yellow') ? 'bg-yellow-500' : 'bg-red-500'}`}
                 style={{ width: `${state.eyeScore.current}%` }}
               ></div>
             </div>
             
-            <div className="text-xs text-gray-600 leading-tight text-center">
-              <div className="font-medium text-green-600 text-xs">Higher is healthier</div>
-              <div className="text-xs text-gray-400">Based on eye strain, blink rate, posture, fatigue levels</div>
+            <div className="text-xs text-gray-500 text-center mb-2">
+              Based on eye strain, posture, fatigue levels
             </div>
             
             {/* AI Break Button integrated into Eye Health Score section */}
-            <div className="mt-2">
+            <div className="mt-3">
               <button
                 onClick={() => handleBreakClick(BreakType.MICRO)}
-                className="w-full px-2 py-1.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-md hover:from-green-400 hover:to-emerald-400 transition-all duration-200 font-medium flex items-center justify-center space-x-1 text-xs"
+                className="w-full px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-400 hover:to-emerald-400 transition-all duration-200 font-medium flex items-center justify-center space-x-2 text-sm"
               >
                 <span>⚡</span>
                 <span>Start Recommended Break with AI</span>
@@ -1129,12 +1129,36 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
           </div>
         </div>
         
-        <button
-          onClick={onOpenSettings}
-          className="w-full mt-7 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
-        >
-          View detailed dashboard →
-        </button>
+        {/* Dashboard Details Section */}
+        <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+          <h3 className="font-semibold text-gray-700 mb-2 text-sm">Dashboard Details</h3>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="bg-white p-2 rounded border">
+              <div className="text-gray-500">Daily Score</div>
+              <div className="font-semibold text-blue-600">{state.eyeScore.daily}/100</div>
+            </div>
+            <div className="bg-white p-2 rounded border">
+              <div className="text-gray-500">Weekly Avg</div>
+              <div className="font-semibold text-green-600">{state.eyeScore.weekly}/100</div>
+            </div>
+            <div className="bg-white p-2 rounded border">
+              <div className="text-gray-500">Streak Days</div>
+              <div className="font-semibold text-purple-600">{state.streakDays}</div>
+            </div>
+            <div className="bg-white p-2 rounded border">
+              <div className="text-gray-500">Real-time</div>
+              <div className="font-semibold text-orange-600">
+                {state.realtimeScore >= 0 ? state.realtimeScore : '--'}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={onOpenSettings}
+            className="w-full mt-2 py-1.5 text-xs text-gray-600 hover:text-gray-800 transition-colors bg-white rounded border hover:bg-gray-50"
+          >
+            View Full Dashboard →
+          </button>
+        </div>
       </div>
 
 

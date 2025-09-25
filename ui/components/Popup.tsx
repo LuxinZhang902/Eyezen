@@ -1082,7 +1082,7 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
             <div className="mt-3">
               <button
                 onClick={() => handleBreakClick(BreakType.MICRO)}
-                className="w-full px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-400 hover:to-emerald-400 transition-all duration-200 font-medium flex items-center justify-center space-x-2 text-sm"
+                className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-400 hover:to-emerald-400 transition-all duration-200 font-medium flex items-center justify-center space-x-2 text-sm"
               >
                 <span>⚡</span>
                 <span>Start Recommended Break with AI</span>
@@ -1129,36 +1129,12 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
           </div>
         </div>
         
-        {/* Dashboard Details Section */}
-        <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-          <h3 className="font-semibold text-gray-700 mb-2 text-sm">Dashboard Details</h3>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="bg-white p-2 rounded border">
-              <div className="text-gray-500">Daily Score</div>
-              <div className="font-semibold text-blue-600">{state.eyeScore.daily}/100</div>
-            </div>
-            <div className="bg-white p-2 rounded border">
-              <div className="text-gray-500">Weekly Avg</div>
-              <div className="font-semibold text-green-600">{state.eyeScore.weekly}/100</div>
-            </div>
-            <div className="bg-white p-2 rounded border">
-              <div className="text-gray-500">Streak Days</div>
-              <div className="font-semibold text-purple-600">{state.streakDays}</div>
-            </div>
-            <div className="bg-white p-2 rounded border">
-              <div className="text-gray-500">Real-time</div>
-              <div className="font-semibold text-orange-600">
-                {state.realtimeScore >= 0 ? state.realtimeScore : '--'}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={onOpenSettings}
-            className="w-full mt-2 py-1.5 text-xs text-gray-600 hover:text-gray-800 transition-colors bg-white rounded border hover:bg-gray-50"
-          >
-            View Full Dashboard →
-          </button>
-        </div>
+        <button
+          onClick={onOpenSettings}
+          className="w-full mt-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+        >
+          View detailed dashboard →
+        </button>
       </div>
 
 

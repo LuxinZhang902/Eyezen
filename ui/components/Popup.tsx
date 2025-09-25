@@ -634,18 +634,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       // Show user instruction with better explanation of Chrome extension limitations
       const userConfirmed = confirm(
         '📹 Camera Permission Setup\n\n' +
-        '🔒 PRIVACY NOTICE:\n' +
-        '• No video is recorded or stored\n' +
-        '• Images are processed locally only\n' +
-        '• One-time analysis, then deleted\n' +
-        '• No data sent to external servers\n\n' +
-        'Chrome extensions require camera permissions to be set to "Allow" for reliable access.\n\n' +
-        'After clicking OK:\n' +
-        '• A permission dialog may appear briefly\n' +
-        '• If it closes quickly, manually set permissions:\n' +
-        '  1. Click the camera icon in Chrome\'s address bar\n' +
-        '  2. Select "Always allow"\n' +
-        '  3. Refresh this extension\n\n' +
+        '🔒 Your privacy is protected - no video is recorded or transmitted, and images are only used for one-time analysis.\n' +
         'Continue? (Cancel for timer-only mode)'
       );
       
@@ -715,7 +704,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
         
         console.log('Camera activated successfully');
         // Show brief success notification
-        alert('🎉 Success! Camera is now active and AI eye health monitoring is running.');
+        alert(' Success! Camera is now active and AI eye health monitoring is running.');
       } else {
         // Handle camera permission denial gracefully
         console.warn('Camera access denied:', response.error);

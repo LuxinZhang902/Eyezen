@@ -24,7 +24,7 @@ declare global {
             content: string;
           }>;
         }): Promise<{
-          prompt(input: string | Array<{ role: 'system' | 'user' | 'assistant'; content: string; }>): Promise<string>;
+          prompt(input: string | Array<{ role: 'system' | 'user' | 'assistant'; content: string | { type: 'text' | 'image'; text?: string; image?: string; }; }>): Promise<string>;
           destroy(): void;
         }>;
       };
@@ -74,6 +74,76 @@ export class ChromeAIService {
       console.log('Chrome AI service initialized successfully');
     } catch (error) {
       console.error('Failed to initialize Chrome AI service:', error);
+    }
+  }
+
+  /**
+   * Send multimodal prompt to Chrome AI (text + image)
+   */
+  static async promptWithImage(
+    textPrompt: string,
+    imageData?: string,
+    options?: {
+      temperature?: number;
+      topK?: number;
+    }
+  ): Promise<string> {
+    try {
+      await this.initialize();
+      
+      if (!this.session) {
+        console.warn('Chrome AI session not available for multimodal prompt');
+        return 'Chrome AI not available for image analysis';
+      }
+
+      const messages = [];
+      
+      if (imageData) {
+        messages.push({
+          role: 'user' as const,
+          content: {
+            type: 'image' as const,
+            image: imageData
+          }
+        });
+      }
+      
+      messages.push({
+        role: 'user' as const,
+        content: textPrompt
+      });
+
+      const response = await this.session.prompt(messages);
+      return response;
+    } catch (error) {
+      console.error('Chrome AI multimodal prompt failed:', error);
+      return 'Unable to analyze image with Chrome AI';
+    }
+  }
+
+  /**
+   * Send text prompt to Chrome AI
+   */
+  static async prompt(
+    textPrompt: string,
+    options?: {
+      temperature?: number;
+      topK?: number;
+    }
+  ): Promise<string> {
+    try {
+      await this.initialize();
+      
+      if (!this.session) {
+        console.warn('Chrome AI session not available for text prompt');
+        return 'Chrome AI not available';
+      }
+
+      const response = await this.session.prompt(textPrompt);
+      return response;
+    } catch (error) {
+      console.error('Chrome AI text prompt failed:', error);
+      return 'Unable to process request with Chrome AI';
     }
   }
 

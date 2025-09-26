@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chrome AI Integration Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            border-left: 4px solid #4CAF50;
+        }
+        .error {
+            border-left-color: #f44336;
+            background: rgba(244, 67, 54, 0.1);
+        }
+        .status {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        h2 {
+            color: #FFD700;
+            border-bottom: 2px solid #FFD700;
+            padding-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Chrome AI Integration Test</h1>
+        
+        <div class="test-section">
+            <h2>Chrome AI Availability Check</h2>
+            <button onclick="checkChromeAI()">Check Chrome AI Support</button>
+            <div id="ai-check-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Text Prompt Test</h2>
+            <button onclick="testTextPrompt()">Test Text Analysis</button>
+            <div id="text-prompt-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Eye Strain Analysis Test</h2>
+            <button onclick="testEyeStrainAnalysis()">Test Eye Strain Detection</button>
+            <div id="eye-strain-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Extension Integration Test</h2>
+            <button onclick="testExtensionIntegration()">Test Extension Features</button>
+            <div id="extension-result"></div>
+        </div>
+    </div>
+
+    <script>
+        async function checkChromeAI() {
+            const resultDiv = document.getElementById('ai-check-result');
+            resultDiv.innerHTML = '<div class="status">Checking Chrome AI availability...</div>';
+            
+            try {
+                if (!window.ai?.languageModel) {
+                    throw new Error('Chrome AI not available in this browser');
+                }
+                
+                const capabilities = await window.ai.languageModel.capabilities();
+                
+                let statusMessage = '';
+                let statusClass = 'result';
+                
+                switch (capabilities.available) {
+                    case 'readily':
+                        statusMessage = '✅ Chrome AI is ready and available!';
+                        break;
+                    case 'after-download':
+                        statusMessage = '⏳ Chrome AI model needs to be downloaded first';
+                        statusClass = 'result';
+                        break;
+                    case 'no':
+                        statusMessage = '❌ Chrome AI is not available on this device';
+                        statusClass = 'result error';
+                        break;
+                }
+                
+                resultDiv.innerHTML = `
+                    <div class="${statusClass}">
+                        <div class="status">${statusMessage}</div>
+                        <div>Capability Status: ${capabilities.available}</div>
+                        <div>Browser: ${navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Other'}</div>
+                        <div>User Agent: ${navigator.userAgent.substring(0, 100)}...</div>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <div class="status">❌ Chrome AI Check Failed</div>
+                        <div>Error: ${error.message}</div>
+                        <div>Make sure you're using Chrome 127+ with AI features enabled</div>
+                    </div>
+                `;
+            }
+        }
+        
+        async function testTextPrompt() {
+            const resultDiv = document.getElementById('text-prompt-result');
+            resultDiv.innerHTML = '<div class="status">Testing text prompt...</div>';
+            
+            try {
+                if (!window.ai?.languageModel) {
+                    throw new Error('Chrome AI not available');
+                }
+                
+                const session = await window.ai.languageModel.create({
+                    temperature: 0.7,
+                    topK: 3
+                });
+                
+                const response = await session.prompt('Analyze this scenario: A user has been working on a computer for 3 hours with a blink rate of 8 blinks per minute and fatigue index of 0.6. Provide a brief eye health assessment.');
+                
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <div class="status">✅ Text Prompt Successful</div>
+                        <div><strong>AI Response:</strong></div>
+                        <div style="margin-top: 10px; font-style: italic;">${response}</div>
+                    </div>
+                `;
+                
+                session.destroy();
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <div class="status">❌ Text Prompt Failed</div>
+                        <div>Error: ${error.message}</div>
+                    </div>
+                `;
+            }
+        }
+        
+        async function testEyeStrainAnalysis() {
+            const resultDiv = document.getElementById('eye-strain-result');
+            resultDiv.innerHTML = '<div class="status">Testing eye strain analysis...</div>';
+            
+            try {
+                // Simulate eye metrics data
+                const mockMetrics = {
+                    timestamp: Date.now(),
+                    blinkRate: 8,
+                    fatigueIndex: 0.65,
+                    posture: 'poor',
+                    earValue: 0.15,
+                    perclosValue: 0.4
+                };
+                
+                const analysisPrompt = `
+Analyze these eye tracking metrics for digital eye strain:
+- Blink Rate: ${mockMetrics.blinkRate} blinks/minute (normal: 15-20)
+- Fatigue Index: ${mockMetrics.fatigueIndex} (0=alert, 1=exhausted)
+- Posture: ${mockMetrics.posture}
+- Eye Aspect Ratio: ${mockMetrics.earValue} (lower = more closed)
+- PERCLOS: ${mockMetrics.perclosValue} (percentage of eye closure)
+
+Provide assessment in JSON format:
+{
+  "strainLevel": number (0-100),
+  "recommendations": ["rec1", "rec2"],
+  "severity": "low|moderate|high"
+}`;
+                
+                if (!window.ai?.languageModel) {
+                    throw new Error('Chrome AI not available');
+                }
+                
+                const session = await window.ai.languageModel.create({
+                    temperature: 0.3,
+                    topK: 5
+                });
+                
+                const response = await session.prompt(analysisPrompt);
+                
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <div class="status">✅ Eye Strain Analysis Successful</div>
+                        <div><strong>Input Metrics:</strong></div>
+                        <div style="margin: 10px 0; font-family: monospace; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 5px;">
+                            Blink Rate: ${mockMetrics.blinkRate}/min<br>
+                            Fatigue Index: ${mockMetrics.fatigueIndex}<br>
+                            Posture: ${mockMetrics.posture}<br>
+                            EAR: ${mockMetrics.earValue}<br>
+                            PERCLOS: ${mockMetrics.perclosValue}
+                        </div>
+                        <div><strong>AI Analysis:</strong></div>
+                        <div style="margin-top: 10px; font-family: monospace; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 5px; white-space: pre-wrap;">${response}</div>
+                    </div>
+                `;
+                
+                session.destroy();
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <div class="status">❌ Eye Strain Analysis Failed</div>
+                        <div>Error: ${error.message}</div>
+                    </div>
+                `;
+            }
+        }
+        
+        async function testExtensionIntegration() {
+            const resultDiv = document.getElementById('extension-result');
+            resultDiv.innerHTML = '<div class="status">Testing extension integration...</div>';
+            
+            try {
+                // Test if extension context is available
+                const hasExtensionContext = typeof chrome !== 'undefined' && chrome.runtime;
+                
+                let integrationStatus = '';
+                if (hasExtensionContext) {
+                    integrationStatus = '✅ Extension context detected';
+                } else {
+                    integrationStatus = '⚠️ No extension context (testing in regular browser)';
+                }
+                
+                // Test Chrome AI + Extension features simulation
+                const features = {
+                    'Chrome AI Support': window.ai?.languageModel ? '✅' : '❌',
+                    'MediaPipe Integration': 'Simulated ✅',
+                    'Storage API': hasExtensionContext ? '✅' : '⚠️',
+                    'Camera Permissions': 'Requires user action ⏳',
+                    'Multimodal Analysis': window.ai?.languageModel ? '✅' : '❌'
+                };
+                
+                const featureList = Object.entries(features)
+                    .map(([feature, status]) => `${feature}: ${status}`)
+                    .join('<br>');
+                
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <div class="status">${integrationStatus}</div>
+                        <div><strong>Feature Compatibility:</strong></div>
+                        <div style="margin: 10px 0; font-family: monospace; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 5px;">
+                            ${featureList}
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <strong>Next Steps:</strong><br>
+                            1. Load as Chrome extension<br>
+                            2. Enable camera permissions<br>
+                            3. Test real-time eye tracking<br>
+                            4. Verify AI-powered recommendations
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <div class="status">❌ Extension Integration Test Failed</div>
+                        <div>Error: ${error.message}</div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Auto-run availability check on page load
+        window.addEventListener('load', () => {
+            setTimeout(checkChromeAI, 1000);
+        });
+    </script>
+</body>
+</html>

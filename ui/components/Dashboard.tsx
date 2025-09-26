@@ -2,13 +2,43 @@ import React, { useState, useEffect } from 'react';
 import { DashboardProps, UserData, UserSettings, EyeMetrics, BreakSession, WeeklySummary } from '../../types/index';
 import { ChromeStorageService } from '../../core/storage/index';
 
+// Analysis interfaces
+interface ImageAnalysisResult {
+  eyeStrainScore: number;
+  confidence: number;
+  analysis: any;
+  summary: string;
+}
+
+interface CameraAnalysisResult {
+  eyeStrainScore: number;
+  confidence: number;
+  analysis: any;
+  summary: string;
+}
+
+type AnalysisMode = 'camera-capture' | 'upload-photo';
+
+// Lazy load AI services
+const loadAIServices = () => Promise.all([
+  import('../../core/api/openai-service').then(m => m.ChromeAIService),
+  import('../../core/coach/index').then(m => m.AICoachService),
+  import('../../core/ai/chrome-ai-vision').then(m => m.ChromeAIVisionService)
+]);
+
 interface DashboardState {
-  activeTab: 'overview' | 'eyeinfo' | 'analytics' | 'goals' | 'settings' | 'privacy';
+  activeTab: 'overview' | 'eyeinfo' | 'analysis' | 'analytics' | 'goals' | 'settings' | 'privacy';
   isLoading: boolean;
   error: string | null;
   weeklyData: WeeklySummary | null;
   todayMetrics: EyeMetrics[];
   todayBreaks: BreakSession[];
+  // Analysis state
+  imageAnalysisResult: ImageAnalysisResult | null;
+  cameraAnalysisResult: CameraAnalysisResult | null;
+  analysisMode: AnalysisMode;
+  aiLoading: boolean;
+  cameraEnabled: boolean;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExportData, onEraseData }) => {
@@ -18,7 +48,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
     error: null,
     weeklyData: null,
     todayMetrics: [],
-    todayBreaks: []
+    todayBreaks: [],
+    // Analysis state
+    imageAnalysisResult: null,
+    cameraAnalysisResult: null,
+    analysisMode: 'camera-capture',
+    aiLoading: false,
+    cameraEnabled: false
   });
 
   useEffect(() => {
@@ -77,6 +113,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
   const handleSettingChange = (key: keyof UserSettings, value: any) => {
     onUpdateSettings({ [key]: value });
   };
+
+
 
   const calculateTodayStats = () => {
     const completedBreaks = state.todayBreaks.filter(b => b.completed).length;
@@ -397,6 +435,215 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
     );
   };
 
+  const renderAnalysis = () => {
+    const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      setState(prev => ({ ...prev, aiLoading: true }));
+
+      try {
+        const [ChromeAIService, AICoachService, ChromeAIVisionService] = await loadAIServices();
+        
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const imageData = e.target?.result as string;
+          
+          try {
+             const analysis = await ChromeAIVisionService.analyzeEyeStrain(imageData);
+             const result: ImageAnalysisResult = {
+               eyeStrainScore: analysis.strainLevel || 0,
+               confidence: analysis.confidenceScore || 0,
+               analysis: analysis,
+               summary: `Eye strain level: ${analysis.strainLevel}%. ${analysis.recommendations[0] || 'Analysis completed'}`
+             };
+            
+            setState(prev => ({ 
+              ...prev, 
+              imageAnalysisResult: result,
+              aiLoading: false 
+            }));
+          } catch (error) {
+            console.error('Analysis failed:', error);
+            setState(prev => ({ ...prev, aiLoading: false }));
+          }
+        };
+        reader.readAsDataURL(file);
+      } catch (error) {
+        console.error('Failed to load AI services:', error);
+        setState(prev => ({ ...prev, aiLoading: false }));
+      }
+    };
+
+    const handleCameraCapture = async () => {
+      setState(prev => ({ ...prev, aiLoading: true }));
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.play();
+
+        video.onloadedmetadata = async () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(video, 0, 0);
+          
+          const imageData = canvas.toDataURL('image/jpeg');
+          stream.getTracks().forEach(track => track.stop());
+
+          try {
+            const [ChromeAIService, AICoachService, ChromeAIVisionService] = await loadAIServices();
+            const analysis = await ChromeAIVisionService.analyzeEyeStrain(imageData);
+             
+             const result: CameraAnalysisResult = {
+               eyeStrainScore: analysis.strainLevel || 0,
+               confidence: analysis.confidenceScore || 0,
+               analysis: analysis,
+               summary: `Eye strain level: ${analysis.strainLevel}%. ${analysis.recommendations[0] || 'Camera analysis completed'}`
+             };
+            
+            setState(prev => ({ 
+              ...prev, 
+              cameraAnalysisResult: result,
+              aiLoading: false 
+            }));
+          } catch (error) {
+            console.error('Camera analysis failed:', error);
+            setState(prev => ({ ...prev, aiLoading: false }));
+          }
+        };
+      } catch (error) {
+        console.error('Camera access failed:', error);
+        setState(prev => ({ ...prev, aiLoading: false }));
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">AI Eye Strain Analysis</h3>
+          
+          {/* Mode Selection */}
+          <div className="flex space-x-4 mb-6">
+            <button
+              onClick={() => setState(prev => ({ ...prev, analysisMode: 'camera-capture' }))}
+              className={`px-4 py-2 rounded-lg transition-colors ${
+                state.analysisMode === 'camera-capture'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              📷 Camera Capture
+            </button>
+            <button
+              onClick={() => setState(prev => ({ ...prev, analysisMode: 'upload-photo' }))}
+              className={`px-4 py-2 rounded-lg transition-colors ${
+                state.analysisMode === 'upload-photo'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              📁 Upload Photo
+            </button>
+          </div>
+
+          {/* Analysis Controls */}
+          {state.analysisMode === 'camera-capture' ? (
+            <div className="space-y-4">
+              <button
+                onClick={handleCameraCapture}
+                disabled={state.aiLoading}
+                className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {state.aiLoading ? 'Analyzing...' : '📷 Capture & Analyze'}
+              </button>
+              
+              {state.cameraAnalysisResult && (
+                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-medium text-blue-800 mb-2">Camera Analysis Result</h4>
+                  <div className="grid grid-cols-2 gap-4 mb-3">
+                    <div>
+                      <span className="text-sm text-blue-600">Eye Strain Score:</span>
+                      <span className="ml-2 font-bold text-blue-800">{state.cameraAnalysisResult.eyeStrainScore}%</span>
+                    </div>
+                    <div>
+                      <span className="text-sm text-blue-600">Confidence:</span>
+                      <span className="ml-2 font-bold text-blue-800">{state.cameraAnalysisResult.confidence}%</span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-blue-700">{state.cameraAnalysisResult.summary}</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  disabled={state.aiLoading}
+                  className="hidden"
+                  id="image-upload"
+                />
+                <label
+                  htmlFor="image-upload"
+                  className={`cursor-pointer inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors ${
+                    state.aiLoading ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {state.aiLoading ? 'Analyzing...' : '📁 Choose Image'}
+                </label>
+                <p className="text-sm text-gray-500 mt-2">Upload a photo for AI eye strain analysis</p>
+              </div>
+              
+              {state.imageAnalysisResult && (
+                <div className="mt-4 p-4 bg-green-50 rounded-lg">
+                  <h4 className="font-medium text-green-800 mb-2">Image Analysis Result</h4>
+                  <div className="grid grid-cols-2 gap-4 mb-3">
+                    <div>
+                      <span className="text-sm text-green-600">Eye Strain Score:</span>
+                      <span className="ml-2 font-bold text-green-800">{state.imageAnalysisResult.eyeStrainScore}%</span>
+                    </div>
+                    <div>
+                      <span className="text-sm text-green-600">Confidence:</span>
+                      <span className="ml-2 font-bold text-green-800">{state.imageAnalysisResult.confidence}%</span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-green-700">{state.imageAnalysisResult.summary}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+
+        </div>
+
+        {/* Analysis Tips */}
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Analysis Tips</h3>
+          <div className="space-y-3">
+            <div className="flex items-start space-x-3">
+              <span className="text-blue-600">💡</span>
+              <p className="text-sm text-gray-600">For best results, ensure good lighting and look directly at the camera</p>
+            </div>
+            <div className="flex items-start space-x-3">
+              <span className="text-green-600">📸</span>
+              <p className="text-sm text-gray-600">Photos should clearly show your eyes and facial expression</p>
+            </div>
+            <div className="flex items-start space-x-3">
+              <span className="text-purple-600">🔒</span>
+              <p className="text-sm text-gray-600">All analysis is performed locally - your images are not stored or transmitted</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderPrivacy = () => (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-lg shadow-sm border">
@@ -487,6 +734,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
             {[
               { id: 'overview', label: 'Overview', icon: '📊' },
               { id: 'eyeinfo', label: 'Eye Info', icon: '👁️' },
+              { id: 'analysis', label: 'Analysis', icon: '🔬' },
               { id: 'analytics', label: 'Analytics', icon: '📈' },
               { id: 'goals', label: 'Goals', icon: '🎯' },
               { id: 'settings', label: 'Settings', icon: '⚙️' },
@@ -512,6 +760,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
         {/* Tab Content */}
         {state.activeTab === 'overview' && renderOverview()}
         {state.activeTab === 'eyeinfo' && renderEyeInfo()}
+        {state.activeTab === 'analysis' && renderAnalysis()}
         {state.activeTab === 'settings' && renderSettings()}
         {state.activeTab === 'privacy' && renderPrivacy()}
         {state.activeTab === 'analytics' && (

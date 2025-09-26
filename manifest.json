@@ -10,7 +10,8 @@
     "notifications",
     "activeTab",
     "offscreen",
-    "tabs"
+    "tabs",
+    "aiLanguageModelOriginTrial"
     ],
   
   "optional_permissions": [],
@@ -62,7 +63,7 @@
   
   "homepage_url": "https://github.com/eyezen/chrome-extension",
   
-  "minimum_chrome_version": "88",
+  "minimum_chrome_version": "127",
   
   "offline_enabled": true,
   

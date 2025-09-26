@@ -14,7 +14,8 @@ const LoginModal = lazy(() => import('./LoginModal'));
 // Lazy load heavy services
 const loadAIServices = () => Promise.all([
   import('../../core/api/openai-service').then(m => m.ChromeAIService),
-  import('../../core/coach/index').then(m => m.AICoachService)
+  import('../../core/coach/index').then(m => m.AICoachService),
+  import('../../core/ai/chrome-ai-vision').then(m => m.ChromeAIVisionService)
 ]);
 
 const loadMetricsService = () => import('../../core/metrics/index').then(m => m.EyeHealthScorer);
@@ -42,8 +43,11 @@ interface PopupState {
   userEmail: string;
 }
 
+
+
 const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProps) => {
   const lastLogTimeRef = useRef<number>(0);
+
   const [state, setState] = useState<PopupState>({
     status: UserStatus.GOOD,
     eyeScore: {
@@ -287,19 +291,58 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       console.log(`  - Health Score Details:`, healthScore);
       console.log(`  - rounded Eye Health score: ${Math.round(newScore)}`);
       
-      // Generate AI recommendation based on current metrics
+      // Generate AI recommendation using Chrome AI Vision (with fallback)
       let aiRecommendation = 'Your eyes are healthy! Keep up the good work.';
       let recommendedBreakType = BreakType.MICRO;
       
-      if (eyeMetrics.fatigueIndex > 0.7) {
-        aiRecommendation = 'High eye strain detected! Take a 15-minute wellness break immediately.';
-        recommendedBreakType = BreakType.LONG;
-      } else if (eyeMetrics.fatigueIndex > 0.4) {
-        aiRecommendation = 'Moderate eye fatigue detected. A 5-minute guided relaxation break is recommended.';
-        recommendedBreakType = BreakType.SHORT;
-      } else if (eyeMetrics.blinkRate < 10) {
-        aiRecommendation = 'Low blink rate detected. Remember to blink more frequently!';
-        recommendedBreakType = BreakType.MICRO;
+      try {
+        // Load Chrome AI Vision service
+         const [ChromeAIService, AICoachService, ChromeAIVisionService] = await loadAIServices();
+         
+         // Try to get camera frame for AI analysis
+         const cameraStream = (window as any).eyeZenCameraStream;
+         if (cameraStream && cameraStream.getVideoTracks().length > 0) {
+           // Create a canvas to capture current frame
+           const video = document.querySelector('video');
+           if (video) {
+             const canvas = document.createElement('canvas');
+             canvas.width = video.videoWidth;
+             canvas.height = video.videoHeight;
+             const ctx = canvas.getContext('2d');
+             if (ctx) {
+               ctx.drawImage(video, 0, 0);
+               const imageData = canvas.toDataURL('image/jpeg', 0.8);
+               
+               // Use Chrome AI Vision for enhanced analysis
+                const aiAnalysis = await ChromeAIVisionService.analyzeEyeStrain(imageData, metricsData);
+                aiRecommendation = aiAnalysis.recommendations[0] || 'AI analysis completed';
+               
+               // Map AI strain level to break type
+               if (aiAnalysis.strainLevel > 70) {
+                 recommendedBreakType = BreakType.LONG;
+               } else if (aiAnalysis.strainLevel > 40) {
+                 recommendedBreakType = BreakType.SHORT;
+               } else {
+                 recommendedBreakType = BreakType.MICRO;
+               }
+               
+               console.log('🤖 Chrome AI Vision Analysis:', aiAnalysis);
+             }
+           }
+         }
+      } catch (error) {
+        console.warn('Chrome AI Vision analysis failed, using fallback:', error);
+        // Fallback to basic rule-based recommendations
+        if (eyeMetrics.fatigueIndex > 0.7) {
+          aiRecommendation = 'High eye strain detected! Take a 15-minute wellness break immediately.';
+          recommendedBreakType = BreakType.LONG;
+        } else if (eyeMetrics.fatigueIndex > 0.4) {
+          aiRecommendation = 'Moderate eye fatigue detected. A 5-minute guided relaxation break is recommended.';
+          recommendedBreakType = BreakType.SHORT;
+        } else if (eyeMetrics.blinkRate < 10) {
+          aiRecommendation = 'Low blink rate detected. Remember to blink more frequently!';
+          recommendedBreakType = BreakType.MICRO;
+        }
       }
       
       // Single setState call to avoid race conditions
@@ -850,6 +893,10 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
     }
   };
 
+
+
+
+
   const handleSignup = async (email: string, password: string, name: string) => {
     console.log('Signup attempt:', { email, name });
     
@@ -945,7 +992,7 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
           onSignup={handleSignup}
         />
       </Suspense>
-      <div className="w-[380px] h-[550px] bg-white overflow-hidden flex flex-col relative">
+      <div className="w-[380px] h-[650px] bg-white flex flex-col relative">
       {/* Header */}
       <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4">
         
@@ -1096,43 +1143,40 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
       </div>
 
       {/* Break Selection */}
-      <div className="px-4 pb-4 flex-1">
+      <div className="px-4 pb-4 flex-1 overflow-y-auto">
         
         {/* Break Selection */}
-        <div>
-          <h3 className="font-semibold text-gray-700 mb-2">Choose Your Break</h3>
-          
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => handleBreakClick(BreakType.MICRO)}
-              className="p-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors duration-200 text-center border border-blue-200"
-            >
-              <div className="text-xl mb-1">⚡</div>
-              <div className="text-xs font-medium">Quick</div>
-              <div className="text-xs opacity-70">20 sec</div>
-            </button>
-            
-            <button
-              onClick={() => handleBreakClick(BreakType.SHORT)}
-              className="p-3 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg transition-colors duration-200 text-center border border-green-200"
-            >
-              <div className="text-xl mb-1">🧘</div>
-              <div className="text-xs font-medium">Eye Break</div>
-              <div className="text-xs opacity-70">5 min</div>
-            </button>
-            
-            <button
-              onClick={() => handleBreakClick(BreakType.LONG)}
-              className="p-3 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg transition-colors duration-200 text-center border border-purple-200"
-            >
-              <div className="text-xl mb-1">💆</div>
-              <div className="text-xs font-medium">Wellness</div>
-              <div className="text-xs opacity-70">15 min</div>
-            </button>
-          </div>
-        </div>
-        
-        <button
+         <div className="mb-2">
+           <h3 className="text-xs font-medium text-gray-600 mb-1">Choose Your Break</h3>
+           <div className="grid grid-cols-3 gap-1">
+             <button
+               onClick={() => handleBreakClick(BreakType.MICRO)}
+               className="flex flex-col items-center p-2 bg-gradient-to-br from-yellow-300 to-orange-400 hover:from-yellow-400 hover:to-orange-500 rounded border border-orange-300 transition-all duration-200 hover:shadow-md text-white"
+             >
+               <span className="text-lg mb-1">⚡</span>
+               <span className="text-xs font-medium text-white">Quick</span>
+               <span className="text-xs text-white opacity-90">20 sec</span>
+             </button>
+             <button
+               onClick={() => handleBreakClick(BreakType.SHORT)}
+               className="flex flex-col items-center p-2 bg-gradient-to-br from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 rounded border border-emerald-400 transition-all duration-200 hover:shadow-md text-white"
+             >
+               <span className="text-lg mb-1">👁️</span>
+               <span className="text-xs font-medium text-white">Eye Break</span>
+               <span className="text-xs text-white opacity-90">5 min</span>
+             </button>
+             <button
+               onClick={() => handleBreakClick(BreakType.LONG)}
+               className="flex flex-col items-center p-2 bg-gradient-to-br from-purple-400 to-indigo-500 hover:from-purple-500 hover:to-indigo-600 rounded border border-indigo-400 transition-all duration-200 hover:shadow-md text-white"
+             >
+               <span className="text-lg mb-1">🧘</span>
+               <span className="text-xs font-medium text-white">Wellness</span>
+               <span className="text-xs text-white opacity-90">15 min</span>
+             </button>
+           </div>
+         </div>
+         
+         <button
           onClick={onOpenSettings}
           className="w-full mt-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
         >

@@ -23,7 +23,11 @@ declare global {
                 }): Promise<{
                     prompt(input: string | Array<{
                         role: 'system' | 'user' | 'assistant';
-                        content: string;
+                        content: string | {
+                            type: 'text' | 'image';
+                            text?: string;
+                            image?: string;
+                        };
                     }>): Promise<string>;
                     destroy(): void;
                 }>;
@@ -40,6 +44,20 @@ export declare class ChromeAIService {
      * Initialize the Chrome AI service
      */
     static initialize(): Promise<void>;
+    /**
+     * Send multimodal prompt to Chrome AI (text + image)
+     */
+    static promptWithImage(textPrompt: string, imageData?: string, options?: {
+        temperature?: number;
+        topK?: number;
+    }): Promise<string>;
+    /**
+     * Send text prompt to Chrome AI
+     */
+    static prompt(textPrompt: string, options?: {
+        temperature?: number;
+        topK?: number;
+    }): Promise<string>;
     /**
      * Generate a personalized coaching script
      */

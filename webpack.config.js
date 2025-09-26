@@ -119,16 +119,43 @@ module.exports = (env, argv) => {
     optimization: {
       splitChunks: {
         chunks: 'all',
+        maxInitialRequests: 10,
+        maxAsyncRequests: 10,
         cacheGroups: {
           vendor: {
-            test: /[\\\/]node_modules[\\\/]/,
+            test: /[\\\\/]node_modules[\\\\/]/,
             name: 'vendors',
-            chunks: 'all'
+            chunks: 'all',
+            priority: 10
+          },
+          react: {
+            test: /[\\\\/]node_modules[\\\\/](react|react-dom)[\\\\/]/,
+            name: 'react',
+            chunks: 'all',
+            priority: 20
+          },
+          mediapipe: {
+            test: /[\\\\/]node_modules[\\\\/]@mediapipe[\\\\/]/,
+            name: 'mediapipe',
+            chunks: 'all',
+            priority: 15
           }
         }
       },
       minimize: isProduction,
       usedExports: false
+    },
+    performance: {
+      hints: 'warning',
+      maxAssetSize: 15000000, // 15MB for WASM files (increased to accommodate MediaPipe assets)
+      maxEntrypointSize: 250000, // 250KB for entrypoints (reduced from previous 500KB)
+      assetFilter: function(assetFilename) {
+        // Don't show warnings for WASM files and MediaPipe assets as they are necessary
+        return !assetFilename.endsWith('.wasm') && 
+               !assetFilename.endsWith('.task') && 
+               !assetFilename.includes('vision_bundle.js') &&
+               !assetFilename.includes('mediapipe-worker-loader.js');
+      }
     }
   };
 };

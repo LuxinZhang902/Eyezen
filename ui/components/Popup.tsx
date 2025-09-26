@@ -3,14 +3,21 @@
  * Main popup interface for the EyeZen Chrome Extension
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { UserStatus, EyeScore, BreakType, PostureStatus, EyeMetrics } from '../../types/index';
 import { ChromeStorageService } from '../../core/storage/index';
-import { ChromeAIService } from '../../core/api/openai-service';
-import { AICoachService } from '../../core/coach/index';
-import { EyeHealthScorer } from '../../core/metrics/index';
-import CameraPermissionPopup from './CameraPermissionPopup';
-import LoginModal from './LoginModal';
+
+// Lazy load heavy components
+const CameraPermissionPopup = lazy(() => import('./CameraPermissionPopup'));
+const LoginModal = lazy(() => import('./LoginModal'));
+
+// Lazy load heavy services
+const loadAIServices = () => Promise.all([
+  import('../../core/api/openai-service').then(m => m.ChromeAIService),
+  import('../../core/coach/index').then(m => m.AICoachService)
+]);
+
+const loadMetricsService = () => import('../../core/metrics/index').then(m => m.EyeHealthScorer);
 
 interface PopupProps {
   onStartBreak: (breakType: BreakType) => void;
@@ -166,6 +173,9 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
         // Calculate current eye health score
         const recentMetrics = userData.metrics.slice(-10);
         console.log('🔍 POPUP: Recent metrics for health score calculation:', recentMetrics.length, recentMetrics);
+        
+        // Lazy load EyeHealthScorer
+        const EyeHealthScorer = await loadMetricsService();
         const healthScore = EyeHealthScorer.calculateScore(recentMetrics);
         console.log('🔍 POPUP: Calculated health score:', healthScore);
         
@@ -181,7 +191,6 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
           .sort((a, b) => b.endTime! - a.endTime!)[0];
         
         // Generate AI recommendation
-        const aiCoach = new AICoachService();
         const avgFatigue = recentMetrics.reduce((sum, m) => sum + (m.fatigueIndex || 0), 0) / recentMetrics.length;
         
         let recommendedType = BreakType.MICRO;
@@ -265,6 +274,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       
       // Calculate proper Eye Health score using EyeHealthScorer
       const recentMetrics = [metricsData]; // Use current metrics for real-time calculation
+      const EyeHealthScorer = await loadMetricsService();
       const healthScore = EyeHealthScorer.calculateScore(recentMetrics);
       const newScore = healthScore.overall;
       const realtimeFatigueScore = Math.max(0, Math.min(100, 100 - (eyeMetrics.fatigueIndex * 100)));
@@ -917,20 +927,24 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
   return (
     <>
       {state.showCameraPermissionPopup && (
-         <CameraPermissionPopup
-           isVisible={state.showCameraPermissionPopup}
-           onApprove={handleCameraPermissionApprove}
-           onReject={handleCameraPermissionReject}
-           onClose={() => setState(prev => ({ ...prev, showCameraPermissionPopup: false }))}
-         />
+        <Suspense fallback={<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div></div>}>
+          <CameraPermissionPopup
+            isVisible={state.showCameraPermissionPopup}
+            onApprove={handleCameraPermissionApprove}
+            onReject={handleCameraPermissionReject}
+            onClose={() => setState(prev => ({ ...prev, showCameraPermissionPopup: false }))}
+          />
+        </Suspense>
        )}
        
-      <LoginModal
-        isVisible={state.showLoginModal}
-        onClose={() => setState(prev => ({ ...prev, showLoginModal: false }))}
-        onLogin={handleLogin}
-        onSignup={handleSignup}
-      />
+      <Suspense fallback={<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div></div>}>
+        <LoginModal
+          isVisible={state.showLoginModal}
+          onClose={() => setState(prev => ({ ...prev, showLoginModal: false }))}
+          onLogin={handleLogin}
+          onSignup={handleSignup}
+        />
+      </Suspense>
       <div className="w-[380px] h-[550px] bg-white overflow-hidden flex flex-col relative">
       {/* Header */}
       <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4">

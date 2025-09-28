@@ -10,6 +10,7 @@ import { ChromeStorageService } from '../../core/storage/index';
 // Lazy load heavy components
 const CameraPermissionPopup = lazy(() => import('./CameraPermissionPopup'));
 const LoginModal = lazy(() => import('./LoginModal'));
+const BreakDetailModal = lazy(() => import('./BreakDetailModal'));
 
 // Lazy load heavy services
 const loadAIServices = () => Promise.all([
@@ -41,6 +42,8 @@ interface PopupState {
   showLoginModal: boolean;
   isLoggedIn: boolean;
   userEmail: string;
+  isModalOpen: boolean;
+  selectedBreakType: BreakType | null;
 }
 
 
@@ -68,7 +71,9 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     aiLoading: true,
     showLoginModal: false,
     isLoggedIn: false,
-    userEmail: ''
+    userEmail: '',
+    isModalOpen: false,
+    selectedBreakType: null
   });
 
   useEffect(() => {
@@ -460,7 +465,19 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
   };
 
   const handleBreakClick = (breakType: BreakType) => {
-    onStartBreak(breakType);
+    setState(prev => ({
+      ...prev,
+      selectedBreakType: breakType,
+      isModalOpen: true
+    }));
+  };
+
+  const handleCloseModal = () => {
+    setState(prev => ({
+      ...prev,
+      isModalOpen: false,
+      selectedBreakType: null
+    }));
   };
 
   const toggleCamera = async () => {
@@ -1184,6 +1201,15 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
         </button>
       </div>
 
+      {/* Break Detail Modal */}
+      <Suspense fallback={<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div></div>}>
+        <BreakDetailModal
+          isOpen={state.isModalOpen}
+          breakType={state.selectedBreakType}
+          onClose={handleCloseModal}
+          onStartBreak={onStartBreak}
+        />
+      </Suspense>
 
     </div>
     </>

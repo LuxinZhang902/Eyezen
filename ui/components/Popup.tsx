@@ -536,7 +536,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       }));
       
       // Show the recommendation in an alert for now
-      alert(`🤖 AI Health Suggestion (${aiSuggestion.category}):\n\n${aiSuggestion.message}`);
+      alert(`AI Health Suggestion (${aiSuggestion.category}):\n\n${aiSuggestion.message}`);
       
     } catch (error) {
       console.error('Failed to generate AI recommendation:', error);
@@ -1273,10 +1273,21 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
          </div>
          
          <button
-          onClick={onOpenSettings}
-          className="w-full mt-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+          onClick={() => {
+            if (state.isLoggedIn) {
+              onOpenSettings();
+            } else {
+              setState(prev => ({ ...prev, showLoginModal: true }));
+            }
+          }}
+          className="w-full mt-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors flex items-center justify-center space-x-2"
         >
-          View detailed dashboard →
+          {!state.isLoggedIn && (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          )}
+          <span>{state.isLoggedIn ? 'View detailed dashboard →' : 'Login to view dashboard →'}</span>
         </button>
       </div>
 

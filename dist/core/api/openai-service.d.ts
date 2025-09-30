@@ -6,32 +6,34 @@
 import { CoachingScript, WeeklySummary, UserData } from '../../types/index';
 declare global {
     interface Window {
-        ai?: {
-            languageModel?: {
-                capabilities(): Promise<{
-                    available: 'readily' | 'after-download' | 'no';
+        LanguageModel?: {
+            availability(): Promise<'readily' | 'after-download' | 'no'>;
+            params(): Promise<{
+                defaultTopK: number;
+                maxTopK: number;
+                defaultTemperature: number;
+                maxTemperature: number;
+            }>;
+            create(options?: {
+                temperature?: number;
+                topK?: number;
+                signal?: AbortSignal;
+                monitor?: (monitor: any) => void;
+                initialPrompts?: Array<{
+                    role: 'system' | 'user' | 'assistant';
+                    content: string;
                 }>;
-                create(options?: {
-                    temperature?: number;
-                    topK?: number;
-                    signal?: AbortSignal;
-                    monitor?: (monitor: any) => void;
-                    initialPrompts?: Array<{
-                        role: 'system' | 'user' | 'assistant';
-                        content: string;
-                    }>;
-                }): Promise<{
-                    prompt(input: string | Array<{
-                        role: 'system' | 'user' | 'assistant';
-                        content: string | {
-                            type: 'text' | 'image';
-                            text?: string;
-                            image?: string;
-                        };
-                    }>): Promise<string>;
-                    destroy(): void;
-                }>;
-            };
+            }): Promise<{
+                prompt(input: string | Array<{
+                    role: 'system' | 'user' | 'assistant';
+                    content: string | {
+                        type: 'text' | 'image';
+                        text?: string;
+                        image?: string;
+                    };
+                }>): Promise<string>;
+                destroy(): void;
+            }>;
         };
     }
 }

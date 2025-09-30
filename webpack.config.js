@@ -10,6 +10,7 @@ module.exports = (env, argv) => {
     entry: {
       popup: './ui/popup.tsx',
       options: './ui/options.tsx',
+      break: './ui/break.tsx',
       background: './background/service-worker.ts',
       'cv-worker': './core/cv-worker/worker.ts'
     },
@@ -70,6 +71,11 @@ module.exports = (env, argv) => {
         template: './ui/options.html',
         filename: 'options.html',
         chunks: ['options']
+      }),
+      new HtmlWebpackPlugin({
+        template: './ui/break.html',
+        filename: 'break.html',
+        chunks: ['break']
       }),
       new CopyWebpackPlugin({
         patterns: [

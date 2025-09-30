@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chrome AI Availability Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        .instructions {
+            background-color: #e9ecef;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .instructions h3 { margin-top: 0; }
+        .instructions ol { padding-left: 20px; }
+        .instructions li { margin: 10px 0; }
+        code {
+            background-color: #f8f9fa;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Chrome AI Availability Test</h1>
+        <p>This page will help you test if Chrome AI (Gemini Nano) is available and properly configured.</p>
+        
+        <div class="instructions">
+            <h3>📋 Setup Instructions</h3>
+            <p><strong>Before testing, you need to enable Chrome AI flags:</strong></p>
+            <ol>
+                <li>Open a new Chrome tab and go to: <code>chrome://flags/#optimization-guide-on-device-model</code></li>
+                <li>Set it to: <strong>"Enabled BypassPerfRequirement"</strong></li>
+                <li>Go to: <code>chrome://flags/#prompt-api-for-gemini-nano</code></li>
+                <li>Set it to: <strong>"Enabled"</strong></li>
+                <li><strong>Restart Chrome completely</strong></li>
+                <li>Come back to this page and click "Test Chrome AI"</li>
+            </ol>
+            <p><strong>Hardware Requirements:</strong></p>
+            <ul>
+                <li>macOS 13+ (Ventura or later)</li>
+                <li>At least 22 GB free disk space</li>
+                <li>GPU with more than 4 GB VRAM</li>
+                <li>Unlimited/unmetered internet connection</li>
+            </ul>
+        </div>
+
+        <button onclick="testChromeAI()">🧪 Test Chrome AI</button>
+        <button onclick="testConsoleCommands()">💻 Show Console Commands</button>
+        <button onclick="checkFlags()">🚩 Check Current Flags</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        async function testChromeAI() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="status info">🔍 Testing Chrome AI availability...</div>';
+            
+            let results = [];
+            
+            // Test 1: Check if LanguageModel exists
+            if ('LanguageModel' in window) {
+                results.push('<div class="status success">✅ LanguageModel API is available</div>');
+                
+                try {
+                    // Test 2: Check availability
+                    const availability = await window.LanguageModel.availability();
+                    results.push(`<div class="status info">📊 Availability status: <strong>${availability}</strong></div>`);
+                    
+                    switch(availability) {
+                        case 'readily':
+                            results.push('<div class="status success">🎉 Chrome AI is ready to use!</div>');
+                            
+                            // Test 3: Try to create a session
+                            try {
+                                const session = await window.LanguageModel.create({
+                                    topK: 3,
+                                    temperature: 0.7
+                                });
+                                results.push('<div class="status success">✅ Successfully created AI session</div>');
+                                
+                                // Test 4: Try a simple prompt
+                                const response = await session.prompt('Say "Hello from Chrome AI!"');
+                                results.push(`<div class="status success">🤖 AI Response: "${response}"</div>`);
+                                
+                                session.destroy();
+                            } catch (error) {
+                                results.push(`<div class="status error">❌ Failed to create session: ${error.message}</div>`);
+                            }
+                            break;
+                            
+                        case 'downloadable':
+                            results.push('<div class="status warning">⏳ Gemini Nano model needs to be downloaded first</div>');
+                            results.push('<div class="status info">💡 Attempting to trigger download...</div>');
+                            
+                            // Try to trigger download by creating a session
+                            try {
+                                const session = await window.LanguageModel.create({
+                                    topK: 3,
+                                    temperature: 0.7,
+                                    monitor(m) {
+                                        m.addEventListener('downloadprogress', (e) => {
+                                            const progress = Math.round(e.loaded * 100);
+                                            console.log(`Download progress: ${progress}%`);
+                                            results.push(`<div class="status info">📥 Download progress: ${progress}%</div>`);
+                                            document.getElementById('results').innerHTML = results.join('');
+                                        });
+                                    }
+                                });
+                                results.push('<div class="status success">✅ Download initiated successfully</div>');
+                                session.destroy();
+                            } catch (error) {
+                                results.push(`<div class="status error">❌ Failed to initiate download: ${error.message}</div>`);
+                            }
+                            break;
+                            
+                        case 'downloading':
+                            results.push('<div class="status warning">📥 Gemini Nano model is currently downloading...</div>');
+                            results.push('<div class="status info">⏰ Please wait for download to complete and try again</div>');
+                            break;
+                            
+                        case 'no':
+                            results.push('<div class="status error">❌ Chrome AI is not available on this device</div>');
+                            results.push('<div class="status info">💡 Check hardware requirements and Chrome flags</div>');
+                            break;
+                    }
+                    
+                } catch (error) {
+                    results.push(`<div class="status error">❌ Error checking availability: ${error.message}</div>`);
+                }
+                
+            } else {
+                results.push('<div class="status error">❌ LanguageModel API not found</div>');
+                results.push('<div class="status warning">⚠️ Make sure you have enabled the Chrome flags and restarted Chrome</div>');
+            }
+            
+            // Additional system info
+            results.push(`<div class="status info">🌐 User Agent: ${navigator.userAgent.substring(0, 100)}...</div>`);
+            results.push(`<div class="status info">💾 Available Storage: ${navigator.storage ? 'Storage API available' : 'Storage API not available'}</div>`);
+            
+            resultsDiv.innerHTML = results.join('');
+        }
+        
+        function testConsoleCommands() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `
+                <div class="status info">
+                    <h3>💻 Console Commands to Test</h3>
+                    <p>Open Chrome DevTools (F12) and run these commands in the Console:</p>
+                    <ol>
+                        <li><code>await LanguageModel.availability()</code> - Should return 'readily', 'after-download', 'downloading', or 'no'</li>
+                        <li><code>await LanguageModel.params()</code> - Shows model parameters</li>
+                        <li><code>const session = await LanguageModel.create(); await session.prompt('Hello!')</code> - Test basic prompt</li>
+                    </ol>
+                </div>
+            `;
+        }
+        
+        function checkFlags() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `
+                <div class="status warning">
+                    <h3>🚩 Check Chrome Flags</h3>
+                    <p>Open these links in new tabs to check your flag settings:</p>
+                    <ul>
+                        <li><a href="chrome://flags/#optimization-guide-on-device-model" target="_blank">chrome://flags/#optimization-guide-on-device-model</a> - Should be "Enabled BypassPerfRequirement"</li>
+                        <li><a href="chrome://flags/#prompt-api-for-gemini-nano" target="_blank">chrome://flags/#prompt-api-for-gemini-nano</a> - Should be "Enabled"</li>
+                        <li><a href="chrome://on-device-internals" target="_blank">chrome://on-device-internals</a> - Check model download status</li>
+                    </ul>
+                    <p><strong>Remember to restart Chrome after changing flags!</strong></p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

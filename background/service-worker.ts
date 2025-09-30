@@ -394,7 +394,7 @@ class BackgroundService {
       }
       
       // Open break ritual page
-      const breakUrl = chrome.runtime.getURL(`break-ritual.html?type=${breakType}&id=${breakId}`);
+      const breakUrl = chrome.runtime.getURL(`break.html?type=${breakType}&id=${breakId}`);
       const tab = await chrome.tabs.create({ url: breakUrl });
       this.activeBreakTabId = tab.id || null;
       

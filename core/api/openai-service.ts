@@ -9,25 +9,27 @@ import { CoachingScript, WeeklySummary, UserData } from '../../types/index';
 // Chrome AI API types
 declare global {
   interface Window {
-    ai?: {
-      languageModel?: {
-        capabilities(): Promise<{
-          available: 'readily' | 'after-download' | 'no';
+    LanguageModel?: {
+      availability(): Promise<'readily' | 'after-download' | 'no'>;
+      params(): Promise<{
+        defaultTopK: number;
+        maxTopK: number;
+        defaultTemperature: number;
+        maxTemperature: number;
+      }>;
+      create(options?: {
+        temperature?: number;
+        topK?: number;
+        signal?: AbortSignal;
+        monitor?: (monitor: any) => void;
+        initialPrompts?: Array<{
+          role: 'system' | 'user' | 'assistant';
+          content: string;
         }>;
-        create(options?: {
-          temperature?: number;
-          topK?: number;
-          signal?: AbortSignal;
-          monitor?: (monitor: any) => void;
-          initialPrompts?: Array<{
-            role: 'system' | 'user' | 'assistant';
-            content: string;
-          }>;
-        }): Promise<{
-          prompt(input: string | Array<{ role: 'system' | 'user' | 'assistant'; content: string | { type: 'text' | 'image'; text?: string; image?: string; }; }>): Promise<string>;
-          destroy(): void;
-        }>;
-      };
+      }): Promise<{
+        prompt(input: string | Array<{ role: 'system' | 'user' | 'assistant'; content: string | { type: 'text' | 'image'; text?: string; image?: string; }; }>): Promise<string>;
+        destroy(): void;
+      }>;
     };
   }
 }
@@ -43,27 +45,27 @@ export class ChromeAIService {
    */
   static async initialize(): Promise<void> {
     try {
-      if (!window.ai?.languageModel) {
+      if (!('LanguageModel' in window)) {
         console.warn('Chrome AI not available. AI features will use mock data.');
         return;
       }
 
-      const capabilities = await window.ai.languageModel.capabilities();
+      const availability = await (window as any).LanguageModel.availability();
       
-      if (capabilities.available === 'no') {
+      if (availability === 'no') {
         console.warn('Chrome AI model not available. AI features will use mock data.');
         return;
       }
 
-      if (capabilities.available === 'after-download') {
+      if (availability === 'after-download') {
         console.log('Chrome AI model downloading...');
       }
 
       // Create a session for general use
-      this.session = await window.ai.languageModel.create({
+      this.session = await (window as any).LanguageModel.create({
         temperature: this.DEFAULT_TEMPERATURE,
         topK: this.DEFAULT_TOP_K,
-        monitor: (m) => {
+        monitor: (m: any) => {
           m.addEventListener('downloadprogress', (e: any) => {
             console.log(`Chrome AI model download progress: ${Math.round(e.loaded * 100)}%`);
           });

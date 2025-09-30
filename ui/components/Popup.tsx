@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { UserStatus, EyeScore, BreakType, PostureStatus, EyeMetrics } from '../../types/index';
 import { ChromeStorageService } from '../../core/storage/index';
+import { ChromeAIService } from '../../core/ai/chromeAI';
 
 // Lazy load heavy components
 const CameraPermissionPopup = lazy(() => import('./CameraPermissionPopup'));
@@ -18,6 +19,9 @@ const loadAIServices = () => Promise.all([
   import('../../core/coach/index').then(m => m.AICoachService),
   import('../../core/ai/chrome-ai-vision').then(m => m.ChromeAIVisionService)
 ]);
+
+// Initialize Chrome AI service
+const chromeAI = new ChromeAIService();
 
 const loadMetricsService = () => import('../../core/metrics/index').then(m => m.EyeHealthScorer);
 
@@ -37,7 +41,7 @@ interface PopupState {
   showCameraPermissionPopup: boolean;
   isFeatureRestricted: boolean;
   aiRecommendation: string;
-  recommendedBreakType: BreakType;
+  aiCategory: 'environment' | 'posture' | 'habits' | 'nutrition' | 'workspace';
   aiLoading: boolean;
   showLoginModal: boolean;
   isLoggedIn: boolean;
@@ -67,7 +71,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     showCameraPermissionPopup: false,
     isFeatureRestricted: false,
     aiRecommendation: 'Analyzing your eye health patterns...',
-    recommendedBreakType: BreakType.MICRO,
+    aiCategory: 'environment',
     aiLoading: true,
     showLoginModal: false,
     isLoggedIn: false,
@@ -199,18 +203,18 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
           .filter(b => b.completed)
           .sort((a, b) => b.endTime! - a.endTime!)[0];
         
-        // Generate AI recommendation
+        // Generate initial AI category and recommendation
         const avgFatigue = recentMetrics.reduce((sum, m) => sum + (m.fatigueIndex || 0), 0) / recentMetrics.length;
         
-        let recommendedType = BreakType.MICRO;
-        let recommendation = 'Take a quick 20-second eye break using the 20-20-20 rule.';
+        let aiCategory: 'environment' | 'posture' | 'habits' | 'nutrition' | 'workspace' = 'environment';
+        let recommendation = 'Analyzing your eye health patterns...';
         
         if (avgFatigue > 0.7) {
-          recommendedType = BreakType.LONG;
-          recommendation = 'High eye strain detected! Take a 15-minute wellness break with TCM massage.';
+          aiCategory = 'workspace';
+          recommendation = 'Consider optimizing your workspace setup for better eye health.';
         } else if (avgFatigue > 0.4) {
-          recommendedType = BreakType.SHORT;
-          recommendation = 'Moderate eye fatigue. A 5-minute guided relaxation break is recommended.';
+          aiCategory = 'posture';
+          recommendation = 'Focus on maintaining proper posture and screen distance.';
         }
 
         // Calculate initial real-time score from most recent metrics
@@ -241,7 +245,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
           showCameraPermissionPopup: false, // Only show when explicitly triggered
           isFeatureRestricted: userData.settings.metricsOnly,
           aiRecommendation: recommendation,
-          recommendedBreakType: recommendedType,
+          aiCategory: aiCategory,
           aiLoading: false,
           showLoginModal: false
           // Preserve existing login state (isLoggedIn, userEmail)
@@ -296,57 +300,73 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       console.log(`  - Health Score Details:`, healthScore);
       console.log(`  - rounded Eye Health score: ${Math.round(newScore)}`);
       
-      // Generate AI recommendation using Chrome AI Vision (with fallback)
+      // Generate AI recommendation using Chrome AI Prompt API (with fallback)
       let aiRecommendation = 'Your eyes are healthy! Keep up the good work.';
-      let recommendedBreakType = BreakType.MICRO;
+      let aiCategory: 'environment' | 'posture' | 'habits' | 'nutrition' | 'workspace' = 'environment';
+      
+      // Set AI loading state
+      setState(prev => ({ ...prev, aiLoading: true }));
       
       try {
-        // Load Chrome AI Vision service
-         const [ChromeAIService, AICoachService, ChromeAIVisionService] = await loadAIServices();
-         
-         // Try to get camera frame for AI analysis
-         const cameraStream = (window as any).eyeZenCameraStream;
-         if (cameraStream && cameraStream.getVideoTracks().length > 0) {
-           // Create a canvas to capture current frame
-           const video = document.querySelector('video');
-           if (video) {
-             const canvas = document.createElement('canvas');
-             canvas.width = video.videoWidth;
-             canvas.height = video.videoHeight;
-             const ctx = canvas.getContext('2d');
-             if (ctx) {
-               ctx.drawImage(video, 0, 0);
-               const imageData = canvas.toDataURL('image/jpeg', 0.8);
-               
-               // Use Chrome AI Vision for enhanced analysis
+        // Use Chrome AI Prompt API for personalized suggestions
+        const aiSuggestion = await chromeAI.generateHealthSuggestion(
+          newScore,
+          realtimeFatigueScore,
+          eyeMetrics
+        );
+        
+        aiRecommendation = aiSuggestion.message;
+        aiCategory = aiSuggestion.category;
+        
+        console.log('🤖 Chrome AI Suggestion:', aiSuggestion);
+        
+        // If Chrome AI is not available, try Chrome AI Vision as fallback
+        if (aiSuggestion.confidence < 0.7) {
+          const [ChromeAIService, AICoachService, ChromeAIVisionService] = await loadAIServices();
+          
+          // Try to get camera frame for AI analysis
+          const cameraStream = (window as any).eyeZenCameraStream;
+          if (cameraStream && cameraStream.getVideoTracks().length > 0) {
+            const video = document.querySelector('video');
+            if (video) {
+              const canvas = document.createElement('canvas');
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(video, 0, 0);
+                const imageData = canvas.toDataURL('image/jpeg', 0.8);
+                
+                // Use Chrome AI Vision for enhanced analysis
                 const aiAnalysis = await ChromeAIVisionService.analyzeEyeStrain(imageData, metricsData);
-                aiRecommendation = aiAnalysis.recommendations[0] || 'AI analysis completed';
-               
-               // Map AI strain level to break type
-               if (aiAnalysis.strainLevel > 70) {
-                 recommendedBreakType = BreakType.LONG;
-               } else if (aiAnalysis.strainLevel > 40) {
-                 recommendedBreakType = BreakType.SHORT;
-               } else {
-                 recommendedBreakType = BreakType.MICRO;
-               }
-               
-               console.log('🤖 Chrome AI Vision Analysis:', aiAnalysis);
-             }
-           }
-         }
+                aiRecommendation = aiAnalysis.recommendations[0] || aiRecommendation;
+                
+                // Map AI strain level to category
+                if (aiAnalysis.strainLevel > 70) {
+                  aiCategory = 'workspace';
+                } else if (aiAnalysis.strainLevel > 40) {
+                  aiCategory = 'posture';
+                } else {
+                  aiCategory = 'environment';
+                }
+                
+                console.log('🤖 Chrome AI Vision Analysis:', aiAnalysis);
+              }
+            }
+          }
+        }
       } catch (error) {
-        console.warn('Chrome AI Vision analysis failed, using fallback:', error);
+        console.warn('Chrome AI analysis failed, using fallback:', error);
         // Fallback to basic rule-based recommendations
         if (eyeMetrics.fatigueIndex > 0.7) {
-          aiRecommendation = 'High eye strain detected! Take a 15-minute wellness break immediately.';
-          recommendedBreakType = BreakType.LONG;
+          aiRecommendation = 'Consider optimizing your workspace lighting and taking regular breaks.';
+          aiCategory = 'workspace';
         } else if (eyeMetrics.fatigueIndex > 0.4) {
-          aiRecommendation = 'Moderate eye fatigue detected. A 5-minute guided relaxation break is recommended.';
-          recommendedBreakType = BreakType.SHORT;
+          aiRecommendation = 'Focus on maintaining proper posture and screen distance.';
+          aiCategory = 'posture';
         } else if (eyeMetrics.blinkRate < 10) {
-          aiRecommendation = 'Low blink rate detected. Remember to blink more frequently!';
-          recommendedBreakType = BreakType.MICRO;
+          aiRecommendation = 'Adjust screen brightness and humidity levels for comfort.';
+          aiCategory = 'environment';
         }
       }
       
@@ -360,7 +380,8 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
         },
         realtimeScore: Math.round(realtimeFatigueScore),
         aiRecommendation,
-        recommendedBreakType
+        aiCategory,
+        aiLoading: false
       }));
       
       console.log(`🔥 [${timestamp}] POPUP: Updated realtimeScore:`, Math.round(realtimeFatigueScore));
@@ -478,6 +499,50 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       isModalOpen: false,
       selectedBreakType: null
     }));
+  };
+
+  const handleAIRecommendation = async () => {
+    try {
+      // Set AI loading state
+      setState(prev => ({ ...prev, aiLoading: true }));
+      
+      // Get current eye metrics and scores
+       const eyeScore = state.eyeScore.current || 50;
+       const fatigueScore = state.realtimeScore || 50;
+       
+       // Create basic eye metrics from current state
+       const eyeMetrics = {
+         blinkRate: 15, // Default values - in real implementation these would come from camera
+         fatigueIndex: fatigueScore / 100,
+         posture: 'good' as any,
+         earValue: 0.25,
+         perclosValue: 0.2,
+         timestamp: Date.now()
+       };
+      
+      // Generate AI suggestion using Chrome AI
+      const aiSuggestion = await chromeAI.generateHealthSuggestion(
+        eyeScore,
+        fatigueScore,
+        eyeMetrics as any
+      );
+      
+      // Update state with AI recommendation
+      setState(prev => ({
+        ...prev,
+        aiRecommendation: aiSuggestion.message,
+        aiCategory: aiSuggestion.category,
+        aiLoading: false
+      }));
+      
+      // Show the recommendation in an alert for now
+      alert(`🤖 AI Health Suggestion (${aiSuggestion.category}):\n\n${aiSuggestion.message}`);
+      
+    } catch (error) {
+      console.error('Failed to generate AI recommendation:', error);
+      setState(prev => ({ ...prev, aiLoading: false }));
+      alert('Sorry, AI recommendations are not available right now. Please try again later.');
+    }
   };
 
   const toggleCamera = async () => {
@@ -1148,16 +1213,30 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
             {/* AI Break Button integrated into Eye Health Score section */}
             <div className="mt-3">
               <button
-                onClick={() => handleBreakClick(BreakType.MICRO)}
-                className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-400 hover:to-emerald-400 transition-all duration-200 font-medium flex items-center justify-center space-x-2 text-sm"
+                onClick={handleAIRecommendation}
+                disabled={state.aiLoading}
+                className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-400 hover:to-emerald-400 transition-all duration-200 font-medium flex items-center justify-center space-x-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span>⚡</span>
-                <span>Start Recommended Break with AI</span>
+                {state.aiLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    <span>Getting AI Suggestions...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>🤖</span>
+                    <span>Get AI Health Suggestions</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
         </div>
+        
+
       </div>
+
+
 
       {/* Break Selection */}
       <div className="px-4 pb-4 flex-1 overflow-y-auto">

@@ -51,7 +51,7 @@ export class ChromeAIService {
           });
         }
       });
-    } else if (availability === 'available') {
+    } else if (availability === 'available') { //The status is available!
       // Model is ready, create session normally
       this.session = await (window as any).LanguageModel.create({
         topK: 3,        // Focus on top 3 most relevant responses

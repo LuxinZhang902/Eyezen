@@ -16,7 +16,7 @@ export declare class ChromeAIService {
     /**
      * Initialize the Chrome AI session
      */
-    initialize(): Promise<boolean>;
+    initialize(): Promise<void>;
     /**
      * Generate personalized eye health suggestions based on metrics
      */

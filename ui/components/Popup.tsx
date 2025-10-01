@@ -556,7 +556,10 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     } catch (error) {
       console.error('Failed to generate AI recommendation:', error);
       setState(prev => ({ ...prev, aiLoading: false }));
-      alert('Sorry, AI recommendations are not available right now. Please try again later.');
+      
+      // Show the actual error message from Chrome AI
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`Chrome AI Error: ${errorMessage}`);
     }
   };
 

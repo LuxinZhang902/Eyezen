@@ -20,56 +20,50 @@ export class ChromeAIService {
   /**
    * Initialize the Chrome AI session
    */
-  async initialize(): Promise<boolean> {
-    try {
-      // Check if Chrome AI is available
-      if (!('LanguageModel' in window)) {
-        console.warn('Chrome AI Prompt API not available');
-        return false;
-      }
-
-      // Check availability
-      const availability = await (window as any).LanguageModel.availability();
-      console.log('Chrome AI model availability:', availability);
-      
-      if (availability === 'no') {
-        console.warn('Chrome AI model not available on this device');
-        return false;
-      }
-
-      // Handle downloadable status - model needs to be downloaded first
-      if (availability === 'downloadable' || availability === 'downloading') {
-        console.log('Chrome AI model needs to be downloaded. Starting download...');
-        
-        // Create session which will trigger download with progress monitoring
-        this.session = await (window as any).LanguageModel.create({
-          topK: 3,        // Focus on top 3 most relevant responses
-          temperature: 0.3, // Lower temperature for more consistent health advice
-          monitor(m: any) {
-            m.addEventListener('downloadprogress', (e: any) => {
-              const progress = Math.round(e.loaded * 100);
-              console.log(`Chrome AI model download progress: ${progress}%`);
-            });
-          }
-        });
-      } else if (availability === 'readily') {
-        // Model is ready, create session normally
-        this.session = await (window as any).LanguageModel.create({
-          topK: 3,        // Focus on top 3 most relevant responses
-          temperature: 0.3 // Lower temperature for more consistent health advice
-        });
-      } else {
-        console.warn('Unknown Chrome AI availability status:', availability);
-        return false;
-      }
-
-      this.isInitialized = true;
-      console.log('Chrome AI service initialized successfully');
-      return true;
-    } catch (error) {
-      console.error('Failed to initialize Chrome AI service:', error);
-      return false;
+  async initialize(): Promise<void> {
+    // Check if Chrome AI is available
+    if (!('LanguageModel' in window)) {
+      console.warn('Chrome AI Prompt API not available');
+      throw new Error('Chrome AI is not available. Please ensure you are using Chrome 127+ with the following flags enabled:\n\n1. chrome://flags/#optimization-guide-on-device-model → "Enabled BypassPerfRequirement"\n2. chrome://flags/#prompt-api-for-gemini-nano → "Enabled"\n\nThen restart Chrome completely.');
     }
+
+    // Check availability
+    const availability = await (window as any).LanguageModel.availability();
+    console.log('Chrome AI model availability:', availability);
+    
+    if (availability === 'no') {
+      console.warn('Chrome AI model not available on this device');
+      throw new Error('Chrome AI is not available on this device. This may be due to:\n\n• Hardware requirements not met (need 22GB+ free space, 4GB+ VRAM)\n• Operating system not supported (requires macOS 13+ or Windows 10+)\n• Chrome flags not properly enabled\n\nPlease check the requirements and try again.');
+    }
+
+    // Handle downloadable status - model needs to be downloaded first
+    if (availability === 'after-download') {
+      console.log('Chrome AI model needs to be downloaded. Starting download...');
+      
+      // Create session which will trigger download with progress monitoring
+      this.session = await (window as any).languageModel.create({
+        topK: 3,        // Focus on top 3 most relevant responses
+        temperature: 0.3, // Lower temperature for more consistent health advice
+        monitor(m: any) {
+          m.addEventListener('downloadprogress', (e: any) => {
+            const progress = Math.round(e.loaded * 100);
+            console.log(`Chrome AI model download progress: ${progress}%`);
+          });
+        }
+      });
+    } else if (availability === 'available') {
+      // Model is ready, create session normally
+      this.session = await (window as any).LanguageModel.create({
+        topK: 3,        // Focus on top 3 most relevant responses
+        temperature: 0.3 // Lower temperature for more consistent health advice
+      });
+    } else {
+      console.warn('Unknown Chrome AI availability status:', availability);
+      throw new Error(`Chrome AI availability status is unknown: ${availability}`);
+    }
+
+    this.isInitialized = true;
+    console.log('Chrome AI service initialized successfully');
   }
 
   /**
@@ -80,21 +74,24 @@ export class ChromeAIService {
     fatigueScore: number,
     eyeMetrics: EyeMetrics
   ): Promise<AIHealthSuggestion> {
+    // Always try to initialize Chrome AI first
     if (!this.isInitialized) {
-      const initialized = await this.initialize();
-      if (!initialized) {
-        return this.getFallbackSuggestion(eyeScore, fatigueScore, eyeMetrics);
-      }
+      await this.initialize(); // This will throw detailed error if initialization fails
     }
 
+    // Use Chrome's built-in AI (Gemini Nano)
     try {
       const prompt = this.buildHealthPrompt(eyeScore, fatigueScore, eyeMetrics);
+      console.log('Sending prompt to Chrome AI:', prompt);
+      
       const response = await this.session.prompt(prompt);
+      console.log('Chrome AI response:', response);
       
       return this.parseAIResponse(response, eyeScore, fatigueScore, eyeMetrics);
     } catch (error) {
       console.error('Chrome AI suggestion generation failed:', error);
-      return this.getFallbackSuggestion(eyeScore, fatigueScore, eyeMetrics);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      throw new Error(`Chrome AI failed to generate suggestion: ${errorMessage}`);
     }
   }
 

@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { UserStatus, EyeScore, BreakType, PostureStatus, EyeMetrics } from '../../types/index';
 import { ChromeStorageService } from '../../core/storage/index';
 import { ChromeAIService } from '../../core/ai/chromeAI';
+import CatAnimation from '../../components/CatAnimation';
 
 // Lazy load heavy components
 const CameraPermissionPopup = lazy(() => import('./CameraPermissionPopup'));
@@ -48,6 +49,8 @@ interface PopupState {
   userEmail: string;
   isModalOpen: boolean;
   selectedBreakType: BreakType | null;
+  showCatAnimation: boolean;
+  catAnimationMessage: string;
 }
 
 
@@ -77,7 +80,9 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     isLoggedIn: false,
     userEmail: '',
     isModalOpen: false,
-    selectedBreakType: null
+    selectedBreakType: null,
+    showCatAnimation: false,
+    catAnimationMessage: ''
   });
 
   useEffect(() => {
@@ -96,12 +101,19 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       validateCameraState();
     }, 3000); // Check every 3 seconds
 
-    // Set up message listener for eye metrics from CV worker
+    // Set up message listener for eye metrics from CV worker and break reminders
     const messageListener = (message: any, sender: any, sendResponse: any) => {
       console.log('🔥 POPUP: Message received:', message.type, message);
       if (message.type === 'EYE_METRICS') {
         console.log('🔥 POPUP: EYE_METRICS message received, calling handleEyeMetrics');
         handleEyeMetrics(message.data);
+      } else if (message.type === 'BREAK_REMINDER') {
+        console.log('🐱 POPUP: Break reminder received, showing cat animation');
+        setState(prev => ({
+          ...prev,
+          showCatAnimation: true,
+          catAnimationMessage: message.message || 'Time for an eye break! 🐾'
+        }));
       }
     };
 
@@ -513,6 +525,14 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       ...prev,
       isModalOpen: false,
       selectedBreakType: null
+    }));
+  };
+
+  const handleCatAnimationComplete = () => {
+    setState(prev => ({
+      ...prev,
+      showCatAnimation: false,
+      catAnimationMessage: ''
     }));
   };
 
@@ -1179,6 +1199,22 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
           </div>
         </div>
       </div>
+
+      {/* Cat Animation for Break Reminders */}
+      {state.showCatAnimation && (
+        <div className="px-4 py-2">
+          <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-3 border border-purple-200 shadow-sm">
+            <div className="text-center mb-2">
+              <p className="text-sm font-medium text-purple-800">{state.catAnimationMessage}</p>
+            </div>
+            <CatAnimation
+              isVisible={state.showCatAnimation}
+              onAnimationComplete={handleCatAnimationComplete}
+              size="medium"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Simplified Status */}
       <div className="p-3 relative">

@@ -5,6 +5,7 @@
 declare class BackgroundService {
     private isInitialized;
     private activeBreakTabId;
+    private chromeAI;
     initialize(): Promise<void>;
     private handleAlarm;
     private handleMessage;

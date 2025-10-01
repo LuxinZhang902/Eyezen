@@ -4,7 +4,8 @@
  */
 
 import { ChromeStorageService } from '../core/storage/index';
-import { BreakType, UserStatus, BreakSession, UserData, EyeScore, UserSettings, DEFAULT_SETTINGS } from '../types/index';
+import { ChromeAIService } from '../core/ai/chromeAI';
+import { BreakType, UserStatus, BreakSession, UserData, EyeScore, UserSettings, DEFAULT_SETTINGS, PostureStatus } from '../types/index';
 
 // Constants
 const ALARM_NAMES = {
@@ -15,7 +16,7 @@ const ALARM_NAMES = {
 } as const;
 
 const DEFAULT_INTERVALS = {
-  BREAK_REMINDER: 20, // 20 minutes for 20-20-20 rule
+  BREAK_REMINDER: 1, // 1 minute for testing
   POSTURE_CHECK: 30,  // 30 minutes for posture reminders
   DAILY_SUMMARY: 24 * 60, // Daily at end of day
   WEEKLY_SUMMARY: 7 * 24 * 60 // Weekly summary
@@ -24,11 +25,14 @@ const DEFAULT_INTERVALS = {
 class BackgroundService {
   private isInitialized = false;
   private activeBreakTabId: number | null = null;
+  private chromeAI!: ChromeAIService; // Initialized in initialize()
 
   async initialize() {
     if (this.isInitialized) return;
 
     try {
+      // Initialize services
+      this.chromeAI = new ChromeAIService();
       // Set up alarm listeners
       chrome.alarms.onAlarm.addListener(this.handleAlarm.bind(this));
       
@@ -281,6 +285,32 @@ class BackgroundService {
         title = '😴 Eyes Getting Tired';
         message = 'Time for a refreshing eye break. Your future self will thank you!';
         priority = 1;
+      } else {
+        // Generate AI-powered rest suggestion
+        try {
+          const aiSuggestion = await this.chromeAI.generateHealthSuggestion(
+            avgEyeStrain * 100, // Convert to percentage
+            avgEyeStrain * 100, // Use same value for fatigue score
+            {
+               blinkRate: 15,
+               fatigueIndex: avgEyeStrain,
+               posture: PostureStatus.GOOD,
+               earValue: 0.25,
+               perclosValue: 0.2,
+               timestamp: Date.now()
+             }
+          );
+          
+          title = `🤖 AI Rest Suggestion (${aiSuggestion.category})`;
+          message = aiSuggestion.message;
+          priority = 1;
+        } catch (error) {
+          console.error('Failed to generate AI suggestion:', error);
+          // Fallback to default message
+          title = '⏰ Break Time Reminder';
+          message = 'Time for your scheduled eye break! Follow the 20-20-20 rule: Look at something 20 feet away for 20 seconds.';
+          priority = 1;
+        }
       }
       
       await this.showNotification({
@@ -294,6 +324,8 @@ class BackgroundService {
           { title: 'Snooze 5min' }
         ]
       });
+      
+      // Note: Cat animation removed - now using AI suggestions only
       
     } catch (error) {
       console.error('Error in break reminder:', error);
@@ -394,7 +426,7 @@ class BackgroundService {
       }
       
       // Open break ritual page
-      const breakUrl = chrome.runtime.getURL(`break.html?type=${breakType}&id=${breakId}`);
+      const breakUrl = chrome.runtime.getURL(`break-ritual.html?type=${breakType}&id=${breakId}`);
       const tab = await chrome.tabs.create({ url: breakUrl });
       this.activeBreakTabId = tab.id || null;
       

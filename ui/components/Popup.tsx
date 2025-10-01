@@ -139,6 +139,18 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       (window as any).storagePollingInterval = storagePollingInterval;
      }
      
+     // Listen for storage changes to sync authentication state
+     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+       if (areaName === 'local' && changes.eyezen_login_state) {
+         console.log('Popup: Login state changed in storage:', changes.eyezen_login_state);
+         loadLoginState();
+       }
+     };
+     
+     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+       chrome.storage.onChanged.addListener(handleStorageChange);
+     }
+     
      return () => {
        clearInterval(interval);
        clearInterval(permissionCheckInterval);
@@ -149,7 +161,10 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
        if (typeof chrome !== 'undefined' && chrome.runtime) {
          chrome.runtime.onMessage.removeListener(messageListener);
        }
-     };10
+       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+         chrome.storage.onChanged.removeListener(handleStorageChange);
+       }
+     };
   }, []);
 
   const loadLoginState = async () => {

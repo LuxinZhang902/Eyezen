@@ -136,18 +136,18 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
       
       // Check if chrome.storage is available
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        const loginData = await chrome.storage.local.get(['eyezen_login_data']);
-        console.log('Login data from storage:', loginData);
+        const result = await chrome.storage.local.get(['eyezen_login_state']);
+        console.log('Login data from storage:', result);
         
-        if (loginData.eyezen_login_data && loginData.eyezen_login_data.email) {
-          console.log('User is logged in:', loginData.eyezen_login_data.email);
+        if (result.eyezen_login_state && result.eyezen_login_state.isLoggedIn) {
+          console.log('User is logged in:', result.eyezen_login_state.userEmail);
           setState(prev => ({ 
             ...prev, 
             isLoggedIn: true, 
-            userEmail: loginData.eyezen_login_data.email,
+            userEmail: result.eyezen_login_state.userEmail,
             isLoading: false 
           }));
-          await loadUserDashboardData(loginData.eyezen_login_data.email);
+          await loadUserDashboardData(result.eyezen_login_state.userEmail);
         } else {
           console.log('No login data found');
           setState(prev => ({ ...prev, isLoggedIn: false, isLoading: false }));
@@ -236,33 +236,43 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
     setState(prev => ({ ...prev, loginLoading: true, loginError: null }));
     
     try {
-      // Simulate API call
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
+      // Get registered users from storage
+      const result = await chrome.storage.local.get(['eyezen_users']);
+      const users = result.eyezen_users || {};
       
-      if (response.ok) {
-        const loginData = { email, timestamp: Date.now() };
-        await chrome.storage.local.set({ eyezen_login_data: loginData });
-        
-        setState(prev => ({
-          ...prev,
+      // Check if user exists
+      if (!users[email]) {
+        throw new Error('No account found with this email address. Please sign up first.');
+      }
+      
+      // Verify password
+      if (users[email].password !== password) {
+        throw new Error('Incorrect password. Please try again.');
+      }
+      
+      // Successful login
+      setState(prev => ({
+        ...prev,
+        isLoggedIn: true,
+        userEmail: email,
+        showLoginModal: false,
+        loginLoading: false
+      }));
+      
+      // Store login state in Chrome storage
+      await chrome.storage.local.set({
+        'eyezen_login_state': {
           isLoggedIn: true,
           userEmail: email,
-          showLoginModal: false,
-          loginLoading: false
-        }));
-        
-        await loadUserDashboardData(email);
-      } else {
-        throw new Error('Invalid credentials');
-      }
+          loginTime: Date.now()
+        }
+      });
+      
+      await loadUserDashboardData(email);
     } catch (error) {
       setState(prev => ({
         ...prev,
-        loginError: 'Login failed. Please check your credentials.',
+        loginError: error instanceof Error ? error.message : 'Login failed. Please check your credentials.',
         loginLoading: false
       }));
     }
@@ -272,10 +282,40 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
     setState(prev => ({ ...prev, loginLoading: true, loginError: null }));
     
     try {
-      // For demo purposes, automatically "register" the user
-      const loginData = { email, name, timestamp: Date.now() };
-      await chrome.storage.local.set({ eyezen_login_data: loginData });
+      // Get existing users from storage
+      const result = await chrome.storage.local.get(['eyezen_users']);
+      const users = result.eyezen_users || {};
       
+      // Check if user already exists
+      if (users[email]) {
+        throw new Error('An account with this email already exists. Please login instead.');
+      }
+      
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        throw new Error('Please enter a valid email address.');
+      }
+      
+      // Validate password strength
+      if (password.length < 6) {
+        throw new Error('Password must be at least 6 characters long.');
+      }
+      
+      // Create new user
+      const newUser = {
+        email,
+        password,
+        name,
+        createdAt: Date.now(),
+        verified: true // Set to true after email verification
+      };
+      
+      // Store user in users database
+      users[email] = newUser;
+      await chrome.storage.local.set({ 'eyezen_users': users });
+      
+      // Successful signup - log them in
       setState(prev => ({
         ...prev,
         isLoggedIn: true,
@@ -284,11 +324,20 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
         loginLoading: false
       }));
       
+      // Store login state
+      await chrome.storage.local.set({
+        'eyezen_login_state': {
+          isLoggedIn: true,
+          userEmail: email,
+          loginTime: Date.now()
+        }
+      });
+      
       await loadUserDashboardData(email);
     } catch (error) {
       setState(prev => ({
         ...prev,
-        loginError: 'Signup failed. Please try again.',
+        loginError: error instanceof Error ? error.message : 'Signup failed. Please try again.',
         loginLoading: false
       }));
     }
@@ -296,7 +345,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
 
   const handleLogout = async () => {
     try {
-      await chrome.storage.local.remove(['eyezen_login_data']);
+      await chrome.storage.local.remove(['eyezen_login_state']);
       
       setState(prev => ({
         ...prev,
@@ -309,10 +358,28 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
     }
   };
 
-  // Check login status on component mount
+  // Check login status on component mount and listen for storage changes
   useEffect(() => {
     console.log('Dashboard mounted, checking login status...');
     checkLoginStatus();
+    
+    // Listen for storage changes to sync authentication state
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+      if (areaName === 'local' && changes.eyezen_login_state) {
+        console.log('Dashboard: Login state changed in storage:', changes.eyezen_login_state);
+        checkLoginStatus();
+      }
+    };
+    
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener(handleStorageChange);
+    }
+    
+    return () => {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+        chrome.storage.onChanged.removeListener(handleStorageChange);
+      }
+    };
   }, []);
 
   // Add a loading check for authentication
@@ -744,14 +811,34 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
     if (!state.isLoggedIn) {
       return (
         <div className="text-center py-8">
-          <div className="text-gray-500 mb-4">🔒 Login Required</div>
-          <p className="text-gray-600 mb-4">Please log in to view your eye protection goals.</p>
-          <button
-            onClick={() => setState(prev => ({ ...prev, showLoginModal: true }))}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg"
-          >
-            Login to Access Goals
-          </button>
+          {/* Enhanced Login Card */}
+          <div className="max-w-md mx-auto bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 rounded-2xl shadow-xl border border-emerald-200/50 p-8">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <span className="text-white text-2xl">🎯</span>
+              </div>
+              <h3 className="text-2xl font-bold text-emerald-800 mb-2">Goals Access Required</h3>
+              <p className="text-emerald-600">Set and track your personalized eye health objectives</p>
+            </div>
+            
+            <button
+              onClick={() => setState(prev => ({ ...prev, showLoginModal: true }))}
+              className="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 mb-6"
+            >
+              Login to Access Goals
+            </button>
+            
+            {/* Feature Preview */}
+            <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-white/40">
+              <h4 className="font-semibold text-emerald-800 mb-3 text-sm">🎯 What you'll get:</h4>
+              <ul className="text-sm text-emerald-700 space-y-1">
+                <li>• Personalized eye health goals</li>
+                <li>• Daily progress tracking</li>
+                <li>• Achievement milestones</li>
+                <li>• Custom break reminders</li>
+              </ul>
+            </div>
+          </div>
         </div>
       );
     }
@@ -845,14 +932,34 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
     if (!state.isLoggedIn) {
       return (
         <div className="text-center py-8">
-          <div className="text-gray-500 mb-4">🔒 Login Required</div>
-          <p className="text-gray-600 mb-4">Please log in to view your detailed analytics.</p>
-          <button
-            onClick={() => setState(prev => ({ ...prev, showLoginModal: true }))}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg"
-          >
-            Login to Access Analytics
-          </button>
+          {/* Enhanced Login Card */}
+          <div className="max-w-md mx-auto bg-gradient-to-br from-purple-50 via-indigo-50 to-pink-50 rounded-2xl shadow-xl border border-purple-200/50 p-8">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <span className="text-white text-2xl">🔒</span>
+              </div>
+              <h3 className="text-2xl font-bold text-purple-800 mb-2">Analytics Access Required</h3>
+              <p className="text-purple-600">Unlock detailed insights into your eye health journey</p>
+            </div>
+            
+            <button
+              onClick={() => setState(prev => ({ ...prev, showLoginModal: true }))}
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 mb-6"
+            >
+              Login to View Analytics
+            </button>
+            
+            {/* Feature Preview */}
+            <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-white/40">
+              <h4 className="font-semibold text-purple-800 mb-3 text-sm">🎯 What you'll get:</h4>
+              <ul className="text-sm text-purple-700 space-y-1">
+                <li>• Detailed eye strain patterns</li>
+                <li>• Weekly progress reports</li>
+                <li>• Personalized recommendations</li>
+                <li>• Historical trend analysis</li>
+              </ul>
+            </div>
+          </div>
         </div>
       );
     }

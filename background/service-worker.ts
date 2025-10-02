@@ -3,6 +3,8 @@
  * Handles alarms, notifications, and background tasks for EyeZen
  */
 
+console.log('📄 EyeZen Service Worker: Script loaded at', new Date().toLocaleString());
+
 import { ChromeStorageService } from '../core/storage/index';
 import { ChromeAIService } from '../core/ai/chromeAI';
 import { BreakType, UserStatus, BreakSession, UserData, EyeScore, UserSettings, DEFAULT_SETTINGS, PostureStatus } from '../types/index';
@@ -16,7 +18,7 @@ const ALARM_NAMES = {
 } as const;
 
 const DEFAULT_INTERVALS = {
-  BREAK_REMINDER: 1, // 1 minute for testing
+  BREAK_REMINDER: 0.5, // 30 seconds (minimum allowed in Chrome 120+) <mcreference link="https://developer.chrome.com/docs/extensions/reference/api/alarms" index="1">1</mcreference>
   POSTURE_CHECK: 30,  // 30 minutes for posture reminders
   DAILY_SUMMARY: 24 * 60, // Daily at end of day
   WEEKLY_SUMMARY: 7 * 24 * 60 // Weekly summary
@@ -34,7 +36,18 @@ class BackgroundService {
       // Initialize services
       this.chromeAI = new ChromeAIService();
       // Set up alarm listeners
+      console.log('🔧 Setting up alarm listener...');
       chrome.alarms.onAlarm.addListener(this.handleAlarm.bind(this));
+      console.log('✅ Alarm listener registered');
+      
+      // Test if alarm listener is working by creating a test alarm
+      console.log('🧪 Creating test alarm to verify listener...');
+      try {
+        await chrome.alarms.create('test-listener', { delayInMinutes: 0.5 }); // 30 seconds (minimum allowed)
+        console.log('✅ Test alarm created successfully');
+      } catch (error) {
+        console.error('❌ Failed to create test alarm:', error);
+      }
       
       // Set up message listeners
       chrome.runtime.onMessage.addListener(this.handleMessage.bind(this));
@@ -57,27 +70,39 @@ class BackgroundService {
   }
 
   private async handleAlarm(alarm: chrome.alarms.Alarm) {
-    console.log('Alarm triggered:', alarm.name);
+    console.log('🚨 Alarm triggered:', {
+      name: alarm.name,
+      scheduledTime: new Date(alarm.scheduledTime).toLocaleString(),
+      currentTime: new Date().toLocaleString()
+    });
     
     try {
       switch (alarm.name) {
+        case 'test-listener':
+          console.log('🧪 TEST ALARM TRIGGERED! Alarm listener is working correctly!');
+          break;
         case ALARM_NAMES.BREAK_REMINDER:
+          console.log('👁️ Processing break reminder alarm');
           await this.handleBreakReminder();
           break;
         case ALARM_NAMES.POSTURE_CHECK:
+          console.log('🏃 Processing posture check alarm');
           await this.handlePostureCheck();
           break;
         case ALARM_NAMES.DAILY_SUMMARY:
+          console.log('📊 Processing daily summary alarm');
           await this.handleDailySummary();
           break;
         case ALARM_NAMES.WEEKLY_SUMMARY:
+          console.log('📈 Processing weekly summary alarm');
           await this.handleWeeklySummary();
           break;
         default:
-          console.log('Unknown alarm:', alarm.name);
+          console.log('❓ Unknown alarm:', alarm.name);
       }
+      console.log('✅ Alarm handled successfully:', alarm.name);
     } catch (error) {
-      console.error('Error handling alarm:', alarm.name, error);
+      console.error('❌ Error handling alarm:', alarm.name, error);
     }
   }
 
@@ -169,6 +194,40 @@ class BackgroundService {
           sendResponse({ success: true });
           break;
           
+        case 'SETUP_ALARMS':
+          console.log('🔧 Service Worker: Setting up alarms (debug)');
+          await this.setupDefaultAlarms();
+          sendResponse({ success: true });
+          break;
+          
+        case 'TEST_NOTIFICATION':
+          console.log('🔔 Service Worker: Sending test notification');
+          await this.showNotification({
+            type: 'basic',
+            iconUrl: 'assets/icons/icon-48.svg',
+            title: '🧪 Test Notification',
+            message: 'This is a test notification from EyeZen debug system.',
+            priority: 1,
+            buttons: [
+              { title: 'Test Button 1' },
+              { title: 'Test Button 2' }
+            ]
+          });
+          sendResponse({ success: true });
+          break;
+          
+        case 'GET_USER_DATA':
+          console.log('💾 Service Worker: Getting user data (debug)');
+          const userData = await ChromeStorageService.getUserData();
+          sendResponse({ success: true, data: userData });
+          break;
+          
+        case 'INITIALIZE_USER_DATA':
+          console.log('🔧 Service Worker: Initializing user data (debug)');
+          await this.setupInitialData();
+          sendResponse({ success: true });
+          break;
+          
         default:
           console.warn('❓ Service Worker: Unknown action:', message.action || message.type);
           sendResponse({ success: false, error: 'Unknown action' });
@@ -215,16 +274,46 @@ class BackgroundService {
       const userData = await ChromeStorageService.getUserData();
       const settings: UserSettings = userData?.settings || DEFAULT_SETTINGS;
       
+      console.log('🔧 Setting up alarms with user data:', {
+        hasUserData: !!userData,
+        reminderEnabled: settings.reminderEnabled,
+        reminderInterval: settings.reminderInterval,
+        defaultInterval: DEFAULT_INTERVALS.BREAK_REMINDER
+      });
+      
       // Clear existing alarms
       await chrome.alarms.clearAll();
+      console.log('🧹 Cleared all existing alarms');
       
       // Set up break reminder alarm
       if (settings.reminderEnabled ?? true) {
-        const interval = settings.reminderInterval ?? DEFAULT_INTERVALS.BREAK_REMINDER;
-        await chrome.alarms.create(ALARM_NAMES.BREAK_REMINDER, {
-          delayInMinutes: interval,
-          periodInMinutes: interval
+        // Use user's reminderInterval setting directly, fallback to testing interval
+        let interval = settings.reminderInterval || DEFAULT_INTERVALS.BREAK_REMINDER;
+        
+        // Ensure minimum interval of 0.5 minutes (30 seconds) for Chrome compatibility
+        if (interval < 0.5) {
+          console.warn('⚠️ Alarm interval too small, adjusting to minimum 0.5 minutes');
+          interval = 0.5;
+        }
+        
+        console.log('⏰ Setting up break reminder alarm:', {
+          userInterval: settings.reminderInterval,
+          defaultInterval: DEFAULT_INTERVALS.BREAK_REMINDER,
+          finalInterval: interval,
+          minAllowed: 0.5
         });
+        
+        try {
+          await chrome.alarms.create(ALARM_NAMES.BREAK_REMINDER, {
+            delayInMinutes: interval,
+            periodInMinutes: interval
+          });
+          console.log(`✅ Created break reminder alarm with ${interval} minute interval (user setting: ${settings.reminderInterval}, testing default: ${DEFAULT_INTERVALS.BREAK_REMINDER})`);
+        } catch (error) {
+          console.error('❌ Failed to create break reminder alarm:', error);
+        }
+      } else {
+        console.log('❌ Break reminder disabled in settings');
       }
       
       // Set up posture check alarm
@@ -233,6 +322,7 @@ class BackgroundService {
           delayInMinutes: DEFAULT_INTERVALS.POSTURE_CHECK,
           periodInMinutes: DEFAULT_INTERVALS.POSTURE_CHECK
         });
+        console.log(`🏃 Created posture check alarm with ${DEFAULT_INTERVALS.POSTURE_CHECK} minute interval`);
       }
       
       // Set up daily summary alarm (8 PM)
@@ -248,26 +338,43 @@ class BackgroundService {
         when: dailySummaryTime.getTime(),
         periodInMinutes: DEFAULT_INTERVALS.DAILY_SUMMARY
       });
+      console.log(`📊 Created daily summary alarm for ${dailySummaryTime.toLocaleString()}`);
       
-      console.log('Default alarms set up successfully');
+      // Verify alarms were created
+      const allAlarms = await chrome.alarms.getAll();
+      console.log('✅ All active alarms:', allAlarms.map(a => ({ name: a.name, scheduledTime: new Date(a.scheduledTime).toLocaleString() })));
+      
+      console.log('🎯 Default alarms set up successfully');
     } catch (error) {
-      console.error('Failed to setup default alarms:', error);
+      console.error('❌ Failed to setup default alarms:', error);
     }
   }
 
   private async handleBreakReminder() {
     try {
+      console.log('🔍 Handling break reminder - fetching user data...');
       const userData = await ChromeStorageService.getUserData();
+      
+      console.log('📋 User data retrieved:', {
+        hasUserData: !!userData,
+        reminderEnabled: userData?.settings?.reminderEnabled,
+        breaksCount: userData?.breaks?.length || 0,
+        metricsCount: userData?.metrics?.length || 0
+      });
+      
       if (!userData || !userData.settings.reminderEnabled) {
+        console.log('❌ Break reminder skipped - no user data or reminders disabled');
         return;
       }
       
       // Check if user is currently in a break
       const activeBreak = userData.breaks.find(b => !b.completed);
       if (activeBreak) {
-        console.log('User is already in a break, skipping reminder');
+        console.log('⏸️ User is already in a break, skipping reminder:', activeBreak.id);
         return;
       }
+      
+      console.log('✅ Proceeding with break reminder notification...');
       
       // Check recent activity to determine reminder urgency
       const recentMetrics = userData.metrics.slice(-5);
@@ -313,6 +420,8 @@ class BackgroundService {
         }
       }
       
+      console.log('🔔 Creating notification:', { title, message, priority });
+      
       await this.showNotification({
         type: 'basic',
         iconUrl: 'assets/icons/icon-48.svg',
@@ -325,10 +434,12 @@ class BackgroundService {
         ]
       });
       
+      console.log('✅ Break reminder notification sent successfully');
+      
       // Note: Cat animation removed - now using AI suggestions only
       
     } catch (error) {
-      console.error('Error in break reminder:', error);
+      console.error('❌ Error in break reminder:', error);
     }
   }
 
@@ -631,6 +742,7 @@ class BackgroundService {
   private async showNotification(options: chrome.notifications.NotificationOptions & { priority?: number }) {
     try {
       const notificationId = `eyezen-${Date.now()}`;
+      console.log('📢 Creating notification with ID:', notificationId);
       
       // Set default options
       const notificationOptions: chrome.notifications.NotificationOptions = {
@@ -655,24 +767,34 @@ class BackgroundService {
         (createOptions as any).buttons = notificationOptions.buttons;
       }
       
+      console.log('🔧 Notification options:', createOptions);
+      
       await chrome.notifications.create(notificationId, createOptions);
+      console.log('✅ Notification created successfully:', notificationId);
       
       // Auto-clear notification after 10 seconds for low priority
       if ((options.priority || 0) === 0) {
+        console.log('⏰ Setting auto-clear timer for low priority notification');
         setTimeout(() => {
           chrome.notifications.clear(notificationId);
+          console.log('🧹 Auto-cleared notification:', notificationId);
         }, 10000);
       }
       
     } catch (error) {
-      console.error('Error showing notification:', error);
+      console.error('❌ Error showing notification:', error);
     }
   }
 }
 
 // Initialize the background service
+console.log('🚀 EyeZen Service Worker: Starting initialization...');
 const backgroundService = new BackgroundService();
-backgroundService.initialize();
+backgroundService.initialize().then(() => {
+  console.log('✅ EyeZen Service Worker: Initialization completed');
+}).catch((error) => {
+  console.error('❌ EyeZen Service Worker: Initialization failed:', error);
+});
 
 // Handle notification clicks
 chrome.notifications.onClicked.addListener((notificationId) => {

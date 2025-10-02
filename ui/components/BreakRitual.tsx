@@ -22,6 +22,7 @@ const BreakRitual: React.FC<BreakRitualProps> = ({ breakType, onComplete, onSkip
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const mountedRef = useRef(true);
 
   function getBreakDuration(type: BreakType): number {
     switch (type) {
@@ -35,28 +36,45 @@ const BreakRitual: React.FC<BreakRitualProps> = ({ breakType, onComplete, onSkip
   useEffect(() => {
     if (state.phase === 'timer' && state.timeRemaining > 0) {
       timerRef.current = setTimeout(() => {
-        setState(prev => ({
-          ...prev,
-          timeRemaining: prev.timeRemaining - 1
-        }));
+        if (mountedRef.current) {
+          setState(prev => ({
+            ...prev,
+            timeRemaining: prev.timeRemaining - 1
+          }));
+        }
       }, 1000);
     } else if (state.timeRemaining === 0 && state.phase === 'timer') {
-      handleTimerComplete();
+      if (mountedRef.current) {
+        handleTimerComplete();
+      }
     }
 
     return () => {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
+        timerRef.current = null;
       }
     };
   }, [state.timeRemaining, state.phase]);
 
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
+
   const handleTimerComplete = () => {
     playNotificationSound();
-    if (breakType === BreakType.MICRO) {
-      setState(prev => ({ ...prev, phase: 'completion' }));
-    } else {
-      setState(prev => ({ ...prev, phase: 'massage' }));
+    if (mountedRef.current) {
+      if (breakType === BreakType.MICRO) {
+        setState(prev => ({ ...prev, phase: 'completion' }));
+      } else {
+        setState(prev => ({ ...prev, phase: 'massage' }));
+      }
     }
   };
 
@@ -74,11 +92,13 @@ const BreakRitual: React.FC<BreakRitualProps> = ({ breakType, onComplete, onSkip
       completed: false,
       timestamp: Date.now()
     };
-    setState(prev => ({
-      ...prev,
-      phase: 'timer',
-      currentActivity: activity
-    }));
+    if (mountedRef.current) {
+      setState(prev => ({
+        ...prev,
+        phase: 'timer',
+        currentActivity: activity
+      }));
+    }
   };
 
   const startMassage = () => {
@@ -89,25 +109,29 @@ const BreakRitual: React.FC<BreakRitualProps> = ({ breakType, onComplete, onSkip
       completed: false,
       timestamp: Date.now()
     };
-    setState(prev => ({
-      ...prev,
-      phase: 'massage',
-      currentActivity: activity,
-      massageStep: 0
-    }));
+    if (mountedRef.current) {
+      setState(prev => ({
+        ...prev,
+        phase: 'massage',
+        currentActivity: activity,
+        massageStep: 0
+      }));
+    }
   };
 
   const nextMassageStep = () => {
     const massagePoints = Object.values(MASSAGE_POINTS);
     if (state.massageStep < massagePoints.length - 1) {
-      setState(prev => ({ ...prev, massageStep: prev.massageStep + 1 }));
+      if (mountedRef.current) {
+        setState(prev => ({ ...prev, massageStep: prev.massageStep + 1 }));
+      }
     } else {
       completeMassage();
     }
   };
 
   const completeMassage = () => {
-    if (state.currentActivity) {
+    if (state.currentActivity && mountedRef.current) {
       const completedActivity = { ...state.currentActivity, completed: true };
       setState(prev => ({
         ...prev,
@@ -126,12 +150,14 @@ const BreakRitual: React.FC<BreakRitualProps> = ({ breakType, onComplete, onSkip
       completed: true,
       timestamp: Date.now()
     };
-    setState(prev => ({
-      ...prev,
-      completedActivities: [...prev.completedActivities, activity],
-      phase: 'script'
-    }));
-    generateScript();
+    if (mountedRef.current) {
+      setState(prev => ({
+        ...prev,
+        completedActivities: [...prev.completedActivities, activity],
+        phase: 'script'
+      }));
+      generateScript();
+    }
   };
 
   const generateScript = async () => {
@@ -142,7 +168,9 @@ const BreakRitual: React.FC<BreakRitualProps> = ({ breakType, onComplete, onSkip
       "Feel the tension leaving your eye muscles as you blink slowly and deliberately."
     ];
     const randomScript = scripts[Math.floor(Math.random() * scripts.length)];
-    setState(prev => ({ ...prev, scriptContent: randomScript }));
+    if (mountedRef.current) {
+      setState(prev => ({ ...prev, scriptContent: randomScript }));
+    }
   };
 
   const completeScript = () => {
@@ -153,11 +181,13 @@ const BreakRitual: React.FC<BreakRitualProps> = ({ breakType, onComplete, onSkip
       completed: true,
       timestamp: Date.now()
     };
-    setState(prev => ({
-      ...prev,
-      completedActivities: [...prev.completedActivities, activity],
-      phase: 'completion'
-    }));
+    if (mountedRef.current) {
+      setState(prev => ({
+        ...prev,
+        completedActivities: [...prev.completedActivities, activity],
+        phase: 'completion'
+      }));
+    }
   };
 
   const handleComplete = () => {

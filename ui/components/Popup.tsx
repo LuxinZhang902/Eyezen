@@ -7,7 +7,6 @@ import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { UserStatus, EyeScore, BreakType, PostureStatus, EyeMetrics } from '../../types/index';
 import { ChromeStorageService } from '../../core/storage/index';
 import { ChromeAIService } from '../../core/ai/chromeAI';
-import CatAnimation from '../../components/CatAnimation';
 
 // Lazy load heavy components
 const CameraPermissionPopup = lazy(() => import('./CameraPermissionPopup'));
@@ -49,8 +48,6 @@ interface PopupState {
   userEmail: string;
   isModalOpen: boolean;
   selectedBreakType: BreakType | null;
-  showCatAnimation: boolean;
-  catAnimationMessage: string;
 }
 
 
@@ -80,9 +77,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     isLoggedIn: false,
     userEmail: '',
     isModalOpen: false,
-    selectedBreakType: null,
-    showCatAnimation: false,
-    catAnimationMessage: ''
+    selectedBreakType: null
   });
 
   useEffect(() => {
@@ -101,19 +96,12 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       validateCameraState();
     }, 3000); // Check every 3 seconds
 
-    // Set up message listener for eye metrics from CV worker and break reminders
+    // Set up message listener for eye metrics from CV worker
     const messageListener = (message: any, sender: any, sendResponse: any) => {
       console.log('🔥 POPUP: Message received:', message.type, message);
       if (message.type === 'EYE_METRICS') {
         console.log('🔥 POPUP: EYE_METRICS message received, calling handleEyeMetrics');
         handleEyeMetrics(message.data);
-      } else if (message.type === 'BREAK_REMINDER') {
-        console.log('🐱 POPUP: Break reminder received, showing cat animation');
-        setState(prev => ({
-          ...prev,
-          showCatAnimation: true,
-          catAnimationMessage: message.message || 'Time for an eye break! 🐾'
-        }));
       }
     };
 
@@ -327,75 +315,8 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       console.log(`  - Health Score Details:`, healthScore);
       console.log(`  - rounded Eye Health score: ${Math.round(newScore)}`);
       
-      // Generate AI recommendation using Chrome AI Prompt API (with fallback)
-      let aiRecommendation = 'Your eyes are healthy! Keep up the good work.';
-      let aiCategory: 'environment' | 'posture' | 'habits' | 'nutrition' | 'workspace' = 'environment';
-      
-      // Set AI loading state
-      setState(prev => ({ ...prev, aiLoading: true }));
-      
-      try {
-        // Use Chrome AI Prompt API for personalized suggestions
-        const aiSuggestion = await chromeAI.generateHealthSuggestion(
-          newScore,
-          realtimeFatigueScore,
-          eyeMetrics
-        );
-        
-        aiRecommendation = aiSuggestion.message;
-        aiCategory = aiSuggestion.category;
-        
-        console.log('🤖 Chrome AI Suggestion:', aiSuggestion);
-        
-        // If Chrome AI is not available, try Chrome AI Vision as fallback
-        if (aiSuggestion.confidence < 0.7) {
-          const [ChromeAIService, AICoachService, ChromeAIVisionService] = await loadAIServices();
-          
-          // Try to get camera frame for AI analysis
-          const cameraStream = (window as any).eyeZenCameraStream;
-          if (cameraStream && cameraStream.getVideoTracks().length > 0) {
-            const video = document.querySelector('video');
-            if (video) {
-              const canvas = document.createElement('canvas');
-              canvas.width = video.videoWidth;
-              canvas.height = video.videoHeight;
-              const ctx = canvas.getContext('2d');
-              if (ctx) {
-                ctx.drawImage(video, 0, 0);
-                const imageData = canvas.toDataURL('image/jpeg', 0.8);
-                
-                // Use Chrome AI Vision for enhanced analysis
-                const aiAnalysis = await ChromeAIVisionService.analyzeEyeStrain(imageData, metricsData);
-                aiRecommendation = aiAnalysis.recommendations[0] || aiRecommendation;
-                
-                // Map AI strain level to category
-                if (aiAnalysis.strainLevel > 70) {
-                  aiCategory = 'workspace';
-                } else if (aiAnalysis.strainLevel > 40) {
-                  aiCategory = 'posture';
-                } else {
-                  aiCategory = 'environment';
-                }
-                
-                console.log('🤖 Chrome AI Vision Analysis:', aiAnalysis);
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.warn('Chrome AI analysis failed, using fallback:', error);
-        // Fallback to basic rule-based recommendations
-        if (eyeMetrics.fatigueIndex > 0.7) {
-          aiRecommendation = 'Consider optimizing your workspace lighting and taking regular breaks.';
-          aiCategory = 'workspace';
-        } else if (eyeMetrics.fatigueIndex > 0.4) {
-          aiRecommendation = 'Focus on maintaining proper posture and screen distance.';
-          aiCategory = 'posture';
-        } else if (eyeMetrics.blinkRate < 10) {
-          aiRecommendation = 'Adjust screen brightness and humidity levels for comfort.';
-          aiCategory = 'environment';
-        }
-      }
+      // AI recommendations are now only generated when user clicks the button
+      // No real-time AI generation to improve performance
       
       // Single setState call to avoid race conditions
       setState(prev => ({
@@ -405,10 +326,8 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
           ...prev.eyeScore,
           current: Math.round(newScore)
         },
-        realtimeScore: Math.round(realtimeFatigueScore),
-        aiRecommendation,
-        aiCategory,
-        aiLoading: false
+        realtimeScore: Math.round(realtimeFatigueScore)
+        // AI recommendations are only updated when user clicks the button
       }));
       
       console.log(`🔥 [${timestamp}] POPUP: Updated realtimeScore:`, Math.round(realtimeFatigueScore));
@@ -525,14 +444,6 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       ...prev,
       isModalOpen: false,
       selectedBreakType: null
-    }));
-  };
-
-  const handleCatAnimationComplete = () => {
-    setState(prev => ({
-      ...prev,
-      showCatAnimation: false,
-      catAnimationMessage: ''
     }));
   };
 
@@ -1199,22 +1110,6 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
           </div>
         </div>
       </div>
-
-      {/* Cat Animation for Break Reminders */}
-      {state.showCatAnimation && (
-        <div className="px-4 py-2">
-          <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-3 border border-purple-200 shadow-sm">
-            <div className="text-center mb-2">
-              <p className="text-sm font-medium text-purple-800">{state.catAnimationMessage}</p>
-            </div>
-            <CatAnimation
-              isVisible={state.showCatAnimation}
-              onAnimationComplete={handleCatAnimationComplete}
-              size="medium"
-            />
-          </div>
-        </div>
-      )}
 
       {/* Simplified Status */}
       <div className="p-3 relative">

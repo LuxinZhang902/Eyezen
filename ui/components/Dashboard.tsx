@@ -659,7 +659,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
                       onChange={(e) => handleSettingChange('reminderInterval', parseInt(e.target.value))}
                       className="w-full px-3 py-2 bg-white border border-orange-200 rounded-lg focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                     >
-                      <option value={1}>1 minutes</option>
+                      <option value={1}>1 minute</option>
                       <option value={15}>15 minutes</option>
                       <option value={20}>20 minutes (recommended)</option>
                       <option value={30}>30 minutes</option>
@@ -769,6 +769,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
                       onChange={(e) => handleSettingChange('reminderInterval', parseInt(e.target.value))}
                       className="w-full px-3 py-2 bg-white border border-orange-200 rounded-lg focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                     >
+                      <option value={1}>1 minute</option>
                       <option value={15}>15 minutes</option>
                       <option value={20}>20 minutes (recommended)</option>
                       <option value={30}>30 minutes</option>

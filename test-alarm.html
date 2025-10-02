@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EyeZen Alarm Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .button { padding: 10px 20px; margin: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .button:hover { background: #0056b3; }
+        .log { background: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; margin: 10px 0; height: 300px; overflow-y: auto; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>🔧 EyeZen Alarm Test</h1>
+    
+    <button class="button" onclick="createTestAlarm()">Create 10-second Test Alarm</button>
+    <button class="button" onclick="listAlarms()">List All Alarms</button>
+    <button class="button" onclick="clearAlarms()">Clear All Alarms</button>
+    <button class="button" onclick="checkServiceWorker()">Check Service Worker</button>
+    
+    <div id="log" class="log">Test log will appear here...</div>
+    
+    <script>
+        const log = document.getElementById('log');
+        
+        function addLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            log.textContent += `[${timestamp}] ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+            console.log(message);
+        }
+        
+        async function createTestAlarm() {
+            try {
+                addLog('🔧 Creating 10-second test alarm...');
+                await chrome.alarms.create('test-alarm', {
+                    delayInMinutes: 0.17 // 10 seconds
+                });
+                addLog('✅ Test alarm created successfully');
+                
+                // List alarms to confirm
+                setTimeout(listAlarms, 1000);
+            } catch (error) {
+                addLog(`❌ Error creating alarm: ${error.message}`);
+            }
+        }
+        
+        async function listAlarms() {
+            try {
+                const alarms = await chrome.alarms.getAll();
+                addLog(`📋 Found ${alarms.length} alarms:`);
+                alarms.forEach(alarm => {
+                    const scheduledTime = new Date(alarm.scheduledTime).toLocaleString();
+                    addLog(`  - ${alarm.name}: ${scheduledTime}`);
+                });
+            } catch (error) {
+                addLog(`❌ Error listing alarms: ${error.message}`);
+            }
+        }
+        
+        async function clearAlarms() {
+            try {
+                await chrome.alarms.clearAll();
+                addLog('🧹 All alarms cleared');
+            } catch (error) {
+                addLog(`❌ Error clearing alarms: ${error.message}`);
+            }
+        }
+        
+        async function checkServiceWorker() {
+            try {
+                addLog('🔍 Checking service worker...');
+                const response = await chrome.runtime.sendMessage({ action: 'GET_STATUS' });
+                addLog(`📊 Service worker response: ${JSON.stringify(response)}`);
+            } catch (error) {
+                addLog(`❌ Service worker error: ${error.message}`);
+            }
+        }
+        
+        // Listen for alarms
+        if (chrome && chrome.alarms) {
+            chrome.alarms.onAlarm.addListener((alarm) => {
+                addLog(`🚨 ALARM TRIGGERED: ${alarm.name} at ${new Date(alarm.scheduledTime).toLocaleString()}`);
+            });
+        }
+        
+        // Initialize
+        addLog('🚀 Alarm test page loaded');
+        checkServiceWorker();
+    </script>
+</body>
+</html>

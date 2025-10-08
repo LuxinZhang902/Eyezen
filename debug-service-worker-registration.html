@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Worker Registration Debug</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background-color: #0056b3; }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Service Worker Registration Debug</h1>
+        
+        <div id="status"></div>
+        
+        <button onclick="checkServiceWorkerRegistration()">Check Service Worker Registration</button>
+        <button onclick="checkExtensionContext()">Check Extension Context</button>
+        <button onclick="testServiceWorkerMessage()">Test Service Worker Message</button>
+        <button onclick="forceServiceWorkerRestart()">Force Service Worker Restart</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+            results.appendChild(div);
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+
+        function logObject(obj, title) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.innerHTML = `<h3>${title}</h3><pre>${JSON.stringify(obj, null, 2)}</pre>`;
+            results.appendChild(div);
+        }
+
+        async function checkServiceWorkerRegistration() {
+            log('Checking service worker registration...', 'info');
+            
+            try {
+                // Check if we're in an extension context
+                if (typeof chrome === 'undefined' || !chrome.runtime) {
+                    log('❌ Chrome extension context not available', 'error');
+                    return;
+                }
+                
+                log('✅ Chrome extension context available', 'success');
+                log(`Extension ID: ${chrome.runtime.id}`, 'info');
+                
+                // Check if service worker is available
+                if ('serviceWorker' in navigator) {
+                    log('✅ Service Worker API available', 'success');
+                    
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    log(`Found ${registrations.length} service worker registrations`, 'info');
+                    
+                    registrations.forEach((registration, index) => {
+                        logObject({
+                            scope: registration.scope,
+                            active: registration.active ? 'Yes' : 'No',
+                            installing: registration.installing ? 'Yes' : 'No',
+                            waiting: registration.waiting ? 'Yes' : 'No',
+                            updateViaCache: registration.updateViaCache
+                        }, `Registration ${index + 1}`);
+                    });
+                } else {
+                    log('❌ Service Worker API not available', 'error');
+                }
+                
+            } catch (error) {
+                log(`❌ Error checking service worker: ${error.message}`, 'error');
+                console.error('Service worker check error:', error);
+            }
+        }
+
+        async function checkExtensionContext() {
+            log('Checking extension context...', 'info');
+            
+            try {
+                const manifest = chrome.runtime.getManifest();
+                logObject({
+                    name: manifest.name,
+                    version: manifest.version,
+                    manifest_version: manifest.manifest_version,
+                    background: manifest.background
+                }, 'Extension Manifest');
+                
+                // Check if background script is defined
+                if (manifest.background && manifest.background.service_worker) {
+                    log(`✅ Service worker defined: ${manifest.background.service_worker}`, 'success');
+                } else {
+                    log('❌ No service worker defined in manifest', 'error');
+                }
+                
+            } catch (error) {
+                log(`❌ Error checking extension context: ${error.message}`, 'error');
+            }
+        }
+
+        async function testServiceWorkerMessage() {
+            log('Testing service worker message...', 'info');
+            
+            try {
+                const response = await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        reject(new Error('Message timeout after 5 seconds'));
+                    }, 5000);
+                    
+                    chrome.runtime.sendMessage({
+                        type: 'POPUP_TEST',
+                        timestamp: Date.now()
+                    }, (response) => {
+                        clearTimeout(timeout);
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message));
+                        } else {
+                            resolve(response);
+                        }
+                    });
+                });
+                
+                log('✅ Service worker responded successfully', 'success');
+                logObject(response, 'Service Worker Response');
+                
+            } catch (error) {
+                log(`❌ Service worker message failed: ${error.message}`, 'error');
+                
+                // Check for specific error patterns
+                if (error.message.includes('Could not establish connection')) {
+                    log('🔍 This indicates the service worker is not running or not responding', 'warning');
+                } else if (error.message.includes('timeout')) {
+                    log('🔍 Service worker is taking too long to respond', 'warning');
+                }
+            }
+        }
+
+        async function forceServiceWorkerRestart() {
+            log('Attempting to force service worker restart...', 'info');
+            
+            try {
+                // Try to reload the extension
+                chrome.runtime.reload();
+                log('✅ Extension reload initiated', 'success');
+            } catch (error) {
+                log(`❌ Could not reload extension: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-run initial checks
+        window.addEventListener('load', () => {
+            log('🚀 Starting service worker diagnostics...', 'info');
+            checkServiceWorkerRegistration();
+            setTimeout(() => checkExtensionContext(), 1000);
+        });
+    </script>
+</body>
+</html>

@@ -12,6 +12,7 @@ import { ChromeAIService } from '../../core/ai/chromeAI';
 const CameraPermissionPopup = lazy(() => import('./CameraPermissionPopup'));
 const LoginModal = lazy(() => import('./LoginModal'));
 const BreakDetailModal = lazy(() => import('./BreakDetailModal'));
+const ReminderModal = lazy(() => import('./ReminderModal'));
 
 // Lazy load heavy services
 const loadAIServices = () => Promise.all([
@@ -48,6 +49,9 @@ interface PopupState {
   userEmail: string;
   isModalOpen: boolean;
   selectedBreakType: BreakType | null;
+  showReminderModal: boolean;
+  reminderInterval: number;
+  isReminderActive: boolean;
 }
 
 
@@ -77,7 +81,10 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     isLoggedIn: false,
     userEmail: '',
     isModalOpen: false,
-    selectedBreakType: null
+    selectedBreakType: null,
+    showReminderModal: false,
+    reminderInterval: 30, // Default to 30 minutes
+    isReminderActive: false
   });
 
   useEffect(() => {
@@ -91,10 +98,12 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     // Set up periodic permission check to detect manual permission changes
     const permissionCheckInterval = setInterval(checkCameraPermissionStatus, 5000); // Check every 5 seconds
     
-    // Set up periodic camera state validation
+    // Set up periodic camera state validation (only when camera is enabled)
     const stateValidationInterval = setInterval(() => {
-      validateCameraState();
-    }, 3000); // Check every 3 seconds
+      if (state.cameraEnabled) {
+        validateCameraState();
+      }
+    }, 10000); // Check every 10 seconds (reduced frequency)
 
     // Set up message listener for eye metrics from CV worker
     const messageListener = (message: any, sender: any, sendResponse: any) => {
@@ -630,12 +639,20 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
 
   const validateCameraState = async () => {
     try {
+      // Only validate camera state if camera is enabled
+      if (!state.cameraEnabled) {
+        return;
+      }
+
       // Query offscreen document for actual camera state
       chrome.runtime.sendMessage(
         { type: 'GET_CAMERA_STATE' },
         (response) => {
           if (chrome.runtime.lastError) {
-            console.error('❌ Error validating camera state:', chrome.runtime.lastError.message);
+            // Only log error if camera is supposed to be enabled
+            if (state.cameraEnabled) {
+              console.error('❌ Error validating camera state:', chrome.runtime.lastError.message);
+            }
             return;
           }
           if (response && response.isActive !== undefined) {
@@ -661,7 +678,10 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
         }
       );
     } catch (error) {
-      console.log('Could not validate camera state:', error);
+      // Only log error if camera is supposed to be enabled
+      if (state.cameraEnabled) {
+        console.log('Could not validate camera state:', error);
+      }
     }
   };
 
@@ -880,6 +900,81 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
     }
   };
 
+  // Alarm/Reminder Functions
+  const handleSetReminder = async (intervalMinutes: number) => {
+    try {
+      // Clear any existing alarm
+      await chrome.alarms.clear('eyezen_break_reminder');
+      
+      // Create new alarm
+      await chrome.alarms.create('eyezen_break_reminder', {
+        delayInMinutes: intervalMinutes,
+        periodInMinutes: intervalMinutes
+      });
+      
+      // Save reminder settings
+      await chrome.storage.local.set({
+        eyezen_reminder: {
+          isActive: true,
+          interval: intervalMinutes,
+          setAt: Date.now()
+        }
+      });
+      
+      setState(prev => ({
+        ...prev,
+        isReminderActive: true,
+        reminderInterval: intervalMinutes,
+        showReminderModal: false
+      }));
+      
+      console.log(`Break reminder set for every ${intervalMinutes} minutes`);
+    } catch (error) {
+      console.error('Failed to set reminder:', error);
+      alert('Failed to set reminder. Please try again.');
+    }
+  };
+
+  const handleClearReminder = async () => {
+    try {
+      // Clear the alarm
+      await chrome.alarms.clear('eyezen_break_reminder');
+      
+      // Clear reminder settings
+      await chrome.storage.local.remove(['eyezen_reminder']);
+      
+      setState(prev => ({
+        ...prev,
+        isReminderActive: false,
+        showReminderModal: false
+      }));
+      
+      console.log('Break reminder cleared');
+    } catch (error) {
+      console.error('Failed to clear reminder:', error);
+    }
+  };
+
+  // Load reminder state on component mount
+  useEffect(() => {
+    const loadReminderState = async () => {
+      try {
+        const result = await chrome.storage.local.get(['eyezen_reminder']);
+        if (result.eyezen_reminder && result.eyezen_reminder.isActive) {
+          setState(prev => ({
+            ...prev,
+            isReminderActive: true,
+            reminderInterval: result.eyezen_reminder.interval
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to load reminder state:', error);
+      }
+    };
+    
+    loadReminderState();
+  }, []);
+
   const handleLogin = async (email: string, password: string) => {
     console.log('Login attempt:', { email });
     
@@ -968,7 +1063,7 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
       users[email] = newUser;
       await chrome.storage.local.set({ 'eyezen_users': users });
       
-      // Successful signup - log them in
+      // Set login state
       setState(prev => ({
         ...prev,
         isLoggedIn: true,
@@ -976,7 +1071,7 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
         showLoginModal: false
       }));
       
-      // Store login state
+      // Store login state in Chrome storage
       await chrome.storage.local.set({
         'eyezen_login_state': {
           isLoggedIn: true,
@@ -985,8 +1080,9 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
         }
       });
       
+      console.log('Signup successful');
     } catch (error) {
-      // Re-throw the error to be handled by LoginModal
+      console.error('Signup failed:', error);
       throw error;
     }
   };
@@ -1035,35 +1131,53 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
               <p className="text-blue-100 text-xs opacity-90">Eye Health Monitor</p>
             </div>
           </div>
-          {state.isLoggedIn ? (
-            <div className="flex items-center space-x-2">
-              <span className="text-xs text-blue-100 opacity-90 truncate max-w-20">
-                {state.userEmail.split('@')[0]}
-              </span>
-              <button
-                onClick={async () => {
-                  await chrome.storage.local.remove(['eyezen_login_state']);
-                  setState(prev => ({ ...prev, isLoggedIn: false, userEmail: '' }));
-                }}
-                className="p-1 hover:bg-white/20 rounded transition-colors"
-                title="Logout"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </button>
-            </div>
-          ) : (
+          <div className="flex items-center space-x-2">
+            {/* Alarm/Reminder Icon */}
             <button
-              onClick={() => setState(prev => ({ ...prev, showLoginModal: true }))}
-              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-              title="Login"
+              onClick={() => setState(prev => ({ ...prev, showReminderModal: true }))}
+              className={`p-2 hover:bg-white/20 rounded-lg transition-colors ${
+                state.isReminderActive ? 'bg-yellow-500/30 text-yellow-200' : ''
+              }`}
+              title={state.isReminderActive ? 'Break reminder active' : 'Set break reminder'}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
+              {state.isReminderActive && (
+                <div className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full"></div>
+              )}
             </button>
-          )}
+            
+            {state.isLoggedIn ? (
+              <div className="flex items-center space-x-2">
+                <span className="text-xs text-blue-100 opacity-90 truncate max-w-20">
+                  {state.userEmail.split('@')[0]}
+                </span>
+                <button
+                  onClick={async () => {
+                    await chrome.storage.local.remove(['eyezen_login_state']);
+                    setState(prev => ({ ...prev, isLoggedIn: false, userEmail: '' }));
+                  }}
+                  className="p-1 hover:bg-white/20 rounded transition-colors"
+                  title="Logout"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setState(prev => ({ ...prev, showLoginModal: true }))}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                title="Login"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
         
         {/* Camera Control - Most Important */}
@@ -1247,6 +1361,18 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
           breakType={state.selectedBreakType}
           onClose={handleCloseModal}
           onStartBreak={onStartBreak}
+        />
+      </Suspense>
+
+      {/* Reminder Modal */}
+      <Suspense fallback={<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div></div>}>
+        <ReminderModal
+          isVisible={state.showReminderModal}
+          onClose={() => setState(prev => ({ ...prev, showReminderModal: false }))}
+          onSetReminder={handleSetReminder}
+          onClearReminder={handleClearReminder}
+          isReminderActive={state.isReminderActive}
+          currentInterval={state.reminderInterval}
         />
       </Suspense>
 

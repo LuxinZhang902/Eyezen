@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug 2-Minute Alarm</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .log { margin: 5px 0; padding: 5px; border-radius: 3px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        .warning { background: #fff3cd; color: #856404; }
+        button { margin: 5px; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>EyeZen 2-Minute Alarm Debug</h1>
+    <div id="output"></div>
+    
+    <button onclick="checkCurrentAlarms()">Check Current Alarms</button>
+    <button onclick="create2MinAlarm()">Create 2-Min Alarm</button>
+    <button onclick="checkStorage()">Check Storage</button>
+    <button onclick="clearAllAlarms()">Clear All Alarms</button>
+    <button onclick="testServiceWorker()">Test Service Worker</button>
+    
+    <script>
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const div = document.createElement('div');
+            div.className = `log ${type}`;
+            div.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            output.appendChild(div);
+            console.log(message);
+        }
+        
+        async function checkCurrentAlarms() {
+            try {
+                log('🔍 Checking current alarms...', 'info');
+                const alarms = await chrome.alarms.getAll();
+                
+                if (alarms.length === 0) {
+                    log('❌ No alarms found', 'warning');
+                } else {
+                    log(`✅ Found ${alarms.length} alarms:`, 'success');
+                    alarms.forEach(alarm => {
+                        const nextFire = new Date(alarm.scheduledTime).toLocaleString();
+                        const timeUntil = Math.round((alarm.scheduledTime - Date.now()) / 1000);
+                        log(`  - ${alarm.name}: Next fire in ${timeUntil}s (${nextFire})`, 'info');
+                    });
+                }
+            } catch (error) {
+                log(`❌ Error checking alarms: ${error.message}`, 'error');
+            }
+        }
+        
+        async function create2MinAlarm() {
+            try {
+                log('⏰ Creating 2-minute test alarm...', 'info');
+                
+                // Clear existing alarm first
+                await chrome.alarms.clear('eyezen_break_reminder');
+                log('🧹 Cleared existing alarm', 'info');
+                
+                // Create new 2-minute alarm
+                await chrome.alarms.create('eyezen_break_reminder', {
+                    delayInMinutes: 2,
+                    periodInMinutes: 2
+                });
+                log('✅ 2-minute alarm created successfully', 'success');
+                
+                // Save to storage
+                await chrome.storage.local.set({
+                    eyezen_reminder: {
+                        isActive: true,
+                        interval: 2,
+                        setAt: Date.now()
+                    }
+                });
+                log('💾 Reminder settings saved to storage', 'success');
+                
+                // Check if alarm was created
+                setTimeout(checkCurrentAlarms, 1000);
+                
+            } catch (error) {
+                log(`❌ Error creating 2-minute alarm: ${error.message}`, 'error');
+            }
+        }
+        
+        async function checkStorage() {
+            try {
+                log('💾 Checking storage...', 'info');
+                const result = await chrome.storage.local.get(['eyezen_reminder', 'eyezen_user_data']);
+                
+                if (result.eyezen_reminder) {
+                    log(`✅ Reminder settings: ${JSON.stringify(result.eyezen_reminder)}`, 'success');
+                } else {
+                    log('❌ No reminder settings found in storage', 'warning');
+                }
+                
+                if (result.eyezen_user_data) {
+                    log(`✅ User data found: ${JSON.stringify(result.eyezen_user_data.settings || {})}`, 'info');
+                } else {
+                    log('❌ No user data found in storage', 'warning');
+                }
+            } catch (error) {
+                log(`❌ Error checking storage: ${error.message}`, 'error');
+            }
+        }
+        
+        async function clearAllAlarms() {
+            try {
+                log('🧹 Clearing all alarms...', 'info');
+                await chrome.alarms.clearAll();
+                log('✅ All alarms cleared', 'success');
+                setTimeout(checkCurrentAlarms, 500);
+            } catch (error) {
+                log(`❌ Error clearing alarms: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testServiceWorker() {
+            try {
+                log('🔧 Testing service worker communication...', 'info');
+                const response = await chrome.runtime.sendMessage({ type: 'GET_STATUS' });
+                log(`✅ Service worker response: ${JSON.stringify(response)}`, 'success');
+            } catch (error) {
+                log(`❌ Service worker error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Listen for alarm events
+        if (chrome && chrome.alarms) {
+            chrome.alarms.onAlarm.addListener((alarm) => {
+                log(`🚨 ALARM FIRED: ${alarm.name} at ${new Date().toLocaleString()}`, 'success');
+            });
+            log('👂 Alarm listener registered', 'info');
+        }
+        
+        // Initialize
+        log('🚀 Debug page loaded', 'info');
+        checkCurrentAlarms();
+        checkStorage();
+    </script>
+</body>
+</html>

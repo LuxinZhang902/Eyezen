@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Notification System - EyeZen</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .test-section {
+            border-left: 4px solid #007bff;
+            padding-left: 15px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 EyeZen Notification System Debug</h1>
+    
+    <div class="container">
+        <h2>📋 System Status</h2>
+        <div id="systemStatus">Loading...</div>
+        <button onclick="checkSystemStatus()">Refresh Status</button>
+    </div>
+
+    <div class="container">
+        <h2>🔔 Notification Permission</h2>
+        <div id="notificationStatus">Checking...</div>
+        <button onclick="requestNotificationPermission()">Request Permission</button>
+        <button onclick="testNotification()">Test Notification</button>
+    </div>
+
+    <div class="container">
+        <h2>⏰ Alarm System</h2>
+        <div id="alarmStatus">Loading...</div>
+        <button onclick="checkAlarms()">Check Alarms</button>
+        <button onclick="forceCreateTestAlarm()">Create Test Alarm (30s)</button>
+        <button onclick="clearAllAlarms()">Clear All Alarms</button>
+    </div>
+
+    <div class="container">
+        <h2>⚙️ User Settings</h2>
+        <div id="settingsStatus">Loading...</div>
+        <button onclick="checkUserSettings()">Check Settings</button>
+        <button onclick="updateReminderInterval()">Set 1 Min Reminder</button>
+    </div>
+
+    <div class="container">
+        <h2>🔄 Service Worker Communication</h2>
+        <div id="serviceWorkerStatus">Loading...</div>
+        <button onclick="testServiceWorkerMessage()">Test Message</button>
+        <button onclick="forceSettingsUpdate()">Force Settings Update</button>
+    </div>
+
+    <div class="container">
+        <h2>📊 Debug Log</h2>
+        <div id="debugLog"></div>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <script>
+        let logContainer = document.getElementById('debugLog');
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `status ${type}`;
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        function clearLog() {
+            logContainer.innerHTML = '';
+        }
+
+        async function checkSystemStatus() {
+            const statusDiv = document.getElementById('systemStatus');
+            
+            if (!chrome || !chrome.runtime) {
+                statusDiv.innerHTML = '<div class="status error">❌ Chrome extension APIs not available</div>';
+                return;
+            }
+
+            try {
+                const response = await chrome.runtime.sendMessage({ action: 'GET_STATUS' });
+                if (response && response.success) {
+                    statusDiv.innerHTML = `
+                        <div class="status success">✅ Service Worker Active</div>
+                        <pre>${JSON.stringify(response.data, null, 2)}</pre>
+                    `;
+                    log('Service worker status retrieved successfully', 'success');
+                } else {
+                    statusDiv.innerHTML = '<div class="status error">❌ Failed to get service worker status</div>';
+                    log('Failed to get service worker status', 'error');
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
+                log(`Service worker error: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkNotificationPermission() {
+            const statusDiv = document.getElementById('notificationStatus');
+            
+            if (!('Notification' in window)) {
+                statusDiv.innerHTML = '<div class="status error">❌ Notifications not supported</div>';
+                return;
+            }
+
+            const permission = Notification.permission;
+            let statusClass = 'info';
+            let statusText = '';
+
+            switch (permission) {
+                case 'granted':
+                    statusClass = 'success';
+                    statusText = '✅ Notifications Allowed';
+                    break;
+                case 'denied':
+                    statusClass = 'error';
+                    statusText = '❌ Notifications Blocked';
+                    break;
+                case 'default':
+                    statusClass = 'warning';
+                    statusText = '⚠️ Notification Permission Not Set';
+                    break;
+            }
+
+            statusDiv.innerHTML = `<div class="status ${statusClass}">${statusText}</div>`;
+            log(`Notification permission: ${permission}`, statusClass === 'success' ? 'success' : 'warning');
+        }
+
+        async function requestNotificationPermission() {
+            if (!('Notification' in window)) {
+                log('Notifications not supported in this browser', 'error');
+                return;
+            }
+
+            try {
+                const permission = await Notification.requestPermission();
+                log(`Notification permission result: ${permission}`, permission === 'granted' ? 'success' : 'warning');
+                await checkNotificationPermission();
+            } catch (error) {
+                log(`Error requesting notification permission: ${error.message}`, 'error');
+            }
+        }
+
+        async function testNotification() {
+            if (Notification.permission !== 'granted') {
+                log('Notification permission not granted', 'error');
+                return;
+            }
+
+            try {
+                const notification = new Notification('🧪 Test Notification', {
+                    body: 'This is a test notification from the debug page',
+                    icon: 'assets/icons/icon-48.svg'
+                });
+                
+                notification.onclick = () => {
+                    log('Test notification clicked', 'info');
+                    notification.close();
+                };
+                
+                setTimeout(() => notification.close(), 5000);
+                log('Test notification created successfully', 'success');
+            } catch (error) {
+                log(`Error creating test notification: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkAlarms() {
+            const statusDiv = document.getElementById('alarmStatus');
+            
+            if (!chrome || !chrome.alarms) {
+                statusDiv.innerHTML = '<div class="status error">❌ Chrome alarms API not available</div>';
+                return;
+            }
+
+            try {
+                const alarms = await chrome.alarms.getAll();
+                if (alarms.length === 0) {
+                    statusDiv.innerHTML = '<div class="status warning">⚠️ No alarms found</div>';
+                    log('No alarms currently set', 'warning');
+                } else {
+                    const alarmList = alarms.map(alarm => {
+                        const nextFire = new Date(alarm.scheduledTime).toLocaleString();
+                        return `<li><strong>${alarm.name}</strong> - Next: ${nextFire} (Period: ${alarm.periodInMinutes || 'N/A'} min)</li>`;
+                    }).join('');
+                    
+                    statusDiv.innerHTML = `
+                        <div class="status success">✅ ${alarms.length} alarm(s) found:</div>
+                        <ul>${alarmList}</ul>
+                    `;
+                    log(`Found ${alarms.length} alarms`, 'success');
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
+                log(`Error checking alarms: ${error.message}`, 'error');
+            }
+        }
+
+        async function forceCreateTestAlarm() {
+            if (!chrome || !chrome.alarms) {
+                log('Chrome alarms API not available', 'error');
+                return;
+            }
+
+            try {
+                await chrome.alarms.create('debug-test-alarm', {
+                    delayInMinutes: 0.5, // 30 seconds
+                    periodInMinutes: 0.5
+                });
+                log('Test alarm created (30 second interval)', 'success');
+                await checkAlarms();
+            } catch (error) {
+                log(`Error creating test alarm: ${error.message}`, 'error');
+            }
+        }
+
+        async function clearAllAlarms() {
+            if (!chrome || !chrome.alarms) {
+                log('Chrome alarms API not available', 'error');
+                return;
+            }
+
+            try {
+                await chrome.alarms.clearAll();
+                log('All alarms cleared', 'success');
+                await checkAlarms();
+            } catch (error) {
+                log(`Error clearing alarms: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkUserSettings() {
+            const statusDiv = document.getElementById('settingsStatus');
+            
+            if (!chrome || !chrome.storage) {
+                statusDiv.innerHTML = '<div class="status error">❌ Chrome storage API not available</div>';
+                return;
+            }
+
+            try {
+                const result = await chrome.storage.local.get(['userData']);
+                if (result.userData) {
+                    const settings = result.userData.settings || {};
+                    statusDiv.innerHTML = `
+                        <div class="status success">✅ User settings found:</div>
+                        <pre>${JSON.stringify(settings, null, 2)}</pre>
+                    `;
+                    log('User settings retrieved successfully', 'success');
+                } else {
+                    statusDiv.innerHTML = '<div class="status warning">⚠️ No user data found</div>';
+                    log('No user data found in storage', 'warning');
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
+                log(`Error checking user settings: ${error.message}`, 'error');
+            }
+        }
+
+        async function updateReminderInterval() {
+            if (!chrome || !chrome.storage) {
+                log('Chrome storage API not available', 'error');
+                return;
+            }
+
+            try {
+                const result = await chrome.storage.local.get(['userData']);
+                const userData = result.userData || { settings: {} };
+                
+                userData.settings.reminderInterval = 1; // 1 minute
+                userData.settings.reminderEnabled = true;
+                
+                await chrome.storage.local.set({ userData });
+                log('Reminder interval set to 1 minute', 'success');
+                
+                // Notify service worker
+                await forceSettingsUpdate();
+                await checkUserSettings();
+            } catch (error) {
+                log(`Error updating reminder interval: ${error.message}`, 'error');
+            }
+        }
+
+        async function testServiceWorkerMessage() {
+            const statusDiv = document.getElementById('serviceWorkerStatus');
+            
+            if (!chrome || !chrome.runtime) {
+                statusDiv.innerHTML = '<div class="status error">❌ Chrome runtime API not available</div>';
+                return;
+            }
+
+            try {
+                const response = await chrome.runtime.sendMessage({ action: 'GET_STATUS' });
+                if (response && response.success) {
+                    statusDiv.innerHTML = '<div class="status success">✅ Service Worker Communication OK</div>';
+                    log('Service worker communication test successful', 'success');
+                } else {
+                    statusDiv.innerHTML = '<div class="status error">❌ Service Worker Not Responding</div>';
+                    log('Service worker not responding to messages', 'error');
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
+                log(`Service worker communication error: ${error.message}`, 'error');
+            }
+        }
+
+        async function forceSettingsUpdate() {
+            if (!chrome || !chrome.runtime) {
+                log('Chrome runtime API not available', 'error');
+                return;
+            }
+
+            try {
+                const response = await chrome.runtime.sendMessage({ 
+                    type: 'SETTINGS_UPDATED',
+                    settings: { reminderInterval: 1, reminderEnabled: true }
+                });
+                
+                if (response && response.success) {
+                    log('Settings update message sent successfully', 'success');
+                } else {
+                    log('Settings update message failed', 'error');
+                }
+            } catch (error) {
+                log(`Error sending settings update: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            log('Debug page loaded', 'info');
+            await checkSystemStatus();
+            await checkNotificationPermission();
+            await checkAlarms();
+            await checkUserSettings();
+            await testServiceWorkerMessage();
+        });
+
+        // Listen for alarm events (if possible)
+        if (chrome && chrome.alarms && chrome.alarms.onAlarm) {
+            chrome.alarms.onAlarm.addListener((alarm) => {
+                log(`🚨 Alarm fired: ${alarm.name}`, 'info');
+            });
+        }
+    </script>
+</body>
+</html>

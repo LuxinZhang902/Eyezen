@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import Dashboard from './components/Dashboard';
 import { UserData, UserSettings } from '../types/index';
 import { ChromeStorageService } from '../core/storage/index';
+import { sendSettingsUpdate } from '../core/utils/service-worker-communication';
 import './styles/popup.css';
 
 interface OptionsPageState {
@@ -52,7 +53,7 @@ const OptionsPage: React.FC = () => {
   };
 
   const handleUpdateSettings = async (newSettings: Partial<UserSettings>) => {
-    if (!state.userData) return;
+    if (!state.userData) return { success: false, error: 'No user data' };
 
     try {
       const updatedUserData: UserData = {
@@ -64,7 +65,9 @@ const OptionsPage: React.FC = () => {
         lastUpdated: Date.now()
       };
 
+      console.log('💾 Saving user data to storage...');
       await ChromeStorageService.saveUserData(updatedUserData);
+      console.log('✅ User data saved successfully');
       
       setState(prev => ({
         ...prev,
@@ -73,18 +76,26 @@ const OptionsPage: React.FC = () => {
 
       // Notify background script of settings change
       if (typeof chrome !== 'undefined' && chrome.runtime) {
-        chrome.runtime.sendMessage({
-          type: 'SETTINGS_UPDATED',
-          data: { settings: updatedUserData.settings },
-          timestamp: Date.now()
-        });
+        try {
+          console.log('📤 Sending SETTINGS_UPDATED message to background script...');
+          const response = await sendSettingsUpdate(updatedUserData.settings);
+          
+          console.log('✅ Settings update message sent successfully:', response);
+          return response || { success: true };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error('❌ Failed to send settings update message:', errorMessage);
+          return { success: false, error: errorMessage };
+        }
       }
+      return { success: true };
     } catch (error) {
       console.error('Failed to update settings:', error);
       setState(prev => ({
         ...prev,
         error: 'Failed to update settings'
       }));
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   };
 
@@ -132,10 +143,14 @@ const OptionsPage: React.FC = () => {
 
       // Notify background script
       if (typeof chrome !== 'undefined' && chrome.runtime) {
-        chrome.runtime.sendMessage({
-          type: 'DATA_ERASED',
-          timestamp: Date.now()
-        });
+        try {
+          await chrome.runtime.sendMessage({
+            type: 'DATA_ERASED',
+            timestamp: Date.now()
+          });
+        } catch (error) {
+          console.error('❌ Failed to notify background script of data erasure:', error);
+        }
       }
 
       alert('All data has been erased successfully.');
@@ -206,11 +221,28 @@ const OptionsPage: React.FC = () => {
   );
 };
 
-// Initialize the React app
+// Initialize the React app with error handling
 const container = document.getElementById('options-root');
 if (container) {
-  const root = createRoot(container);
-  root.render(<OptionsPage />);
+  // Clear any existing content to prevent DOM conflicts
+  container.innerHTML = '';
+  
+  try {
+    const root = createRoot(container);
+    root.render(<OptionsPage />);
+  } catch (error) {
+    console.error('Failed to initialize React root:', error);
+    // Fallback error display
+    container.innerHTML = `
+      <div style="padding: 20px; text-align: center; color: red;">
+        <h2>Failed to load options page</h2>
+        <p>Please try refreshing the page or reloading the extension.</p>
+        <button onclick="window.location.reload()" style="padding: 10px 20px; margin-top: 10px;">
+          Reload Page
+        </button>
+      </div>
+    `;
+  }
 } else {
   console.error('Options root element not found');
 }

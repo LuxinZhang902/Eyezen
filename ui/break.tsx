@@ -152,11 +152,28 @@ const BreakPage: React.FC = () => {
   );
 };
 
-// Initialize the React app
+// Initialize the React app with error handling
 const container = document.getElementById('break-root');
 if (container) {
-  const root = createRoot(container);
-  root.render(<BreakPage />);
+  // Clear any existing content to prevent DOM conflicts
+  container.innerHTML = '';
+  
+  try {
+    const root = createRoot(container);
+    root.render(<BreakPage />);
+  } catch (error) {
+    console.error('Failed to initialize break page React root:', error);
+    // Fallback error display
+    container.innerHTML = `
+      <div style="padding: 20px; text-align: center; color: red;">
+        <h2>Failed to load break page</h2>
+        <p>Please try refreshing the page or reloading the extension.</p>
+        <button onclick="window.close()" style="padding: 10px 20px; margin-top: 10px;">
+          Close
+        </button>
+      </div>
+    `;
+  }
 } else {
   console.error('Break root element not found');
 }

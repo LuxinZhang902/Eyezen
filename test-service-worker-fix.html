@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Worker Communication Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #005a87;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .warning { color: #ffc107; }
+        .info { color: #17a2b8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Service Worker Communication Test</h1>
+        <p>This page tests the improved service worker communication system.</p>
+        
+        <div class="test-section">
+            <h3>🏓 PING Test</h3>
+            <button onclick="testPing()">Test PING</button>
+            <button onclick="testMultiplePings()">Test Multiple PINGs</button>
+            <div id="pingLog" class="log"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>⚙️ Settings Update Test</h3>
+            <button onclick="testSettingsUpdate()">Test Settings Update</button>
+            <button onclick="testMultipleSettings()">Test Multiple Settings</button>
+            <div id="settingsLog" class="log"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🔄 Stress Test</h3>
+            <button onclick="stressTest()">Run Stress Test</button>
+            <button onclick="clearLogs()">Clear All Logs</button>
+            <div id="stressLog" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        function log(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type;
+            element.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            element.scrollTop = element.scrollHeight;
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        async function testPing() {
+            log('pingLog', '🏓 Testing PING message...', 'info');
+            
+            try {
+                const response = await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        reject(new Error('PING timeout'));
+                    }, 5000);
+
+                    chrome.runtime.sendMessage({ type: 'PING' }, (response) => {
+                        clearTimeout(timeout);
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message));
+                        } else {
+                            resolve(response);
+                        }
+                    });
+                });
+
+                if (response && response.success) {
+                    log('pingLog', `✅ PING successful: ${JSON.stringify(response)}`, 'success');
+                } else {
+                    log('pingLog', `❌ PING failed: ${JSON.stringify(response)}`, 'error');
+                }
+            } catch (error) {
+                log('pingLog', `❌ PING error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testMultiplePings() {
+            log('pingLog', '🏓 Testing multiple PING messages...', 'info');
+            
+            for (let i = 1; i <= 5; i++) {
+                try {
+                    log('pingLog', `🏓 PING attempt ${i}/5`, 'info');
+                    
+                    const response = await new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => {
+                            reject(new Error('PING timeout'));
+                        }, 3000);
+
+                        chrome.runtime.sendMessage({ type: 'PING' }, (response) => {
+                            clearTimeout(timeout);
+                            if (chrome.runtime.lastError) {
+                                reject(new Error(chrome.runtime.lastError.message));
+                            } else {
+                                resolve(response);
+                            }
+                        });
+                    });
+
+                    if (response && response.success) {
+                        log('pingLog', `✅ PING ${i} successful`, 'success');
+                    } else {
+                        log('pingLog', `❌ PING ${i} failed: ${JSON.stringify(response)}`, 'error');
+                    }
+                } catch (error) {
+                    log('pingLog', `❌ PING ${i} error: ${error.message}`, 'error');
+                }
+                
+                // Small delay between pings
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        async function testSettingsUpdate() {
+            log('settingsLog', '⚙️ Testing SETTINGS_UPDATED message...', 'info');
+            
+            const testSettings = {
+                breakInterval: 30,
+                breakDuration: 5,
+                notificationsEnabled: true,
+                testTimestamp: Date.now()
+            };
+
+            try {
+                const response = await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        reject(new Error('Settings update timeout'));
+                    }, 10000);
+
+                    chrome.runtime.sendMessage({
+                        type: 'SETTINGS_UPDATED',
+                        data: { settings: testSettings }
+                    }, (response) => {
+                        clearTimeout(timeout);
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message));
+                        } else {
+                            resolve(response);
+                        }
+                    });
+                });
+
+                if (response && response.success) {
+                    log('settingsLog', `✅ Settings update successful: ${JSON.stringify(response)}`, 'success');
+                } else {
+                    log('settingsLog', `❌ Settings update failed: ${JSON.stringify(response)}`, 'error');
+                }
+            } catch (error) {
+                log('settingsLog', `❌ Settings update error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testMultipleSettings() {
+            log('settingsLog', '⚙️ Testing multiple settings updates...', 'info');
+            
+            for (let i = 1; i <= 3; i++) {
+                const testSettings = {
+                    breakInterval: 30 + i,
+                    breakDuration: 5 + i,
+                    notificationsEnabled: i % 2 === 0,
+                    testTimestamp: Date.now(),
+                    iteration: i
+                };
+
+                try {
+                    log('settingsLog', `⚙️ Settings update attempt ${i}/3`, 'info');
+                    
+                    const response = await new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => {
+                            reject(new Error('Settings update timeout'));
+                        }, 8000);
+
+                        chrome.runtime.sendMessage({
+                            type: 'SETTINGS_UPDATED',
+                            data: { settings: testSettings }
+                        }, (response) => {
+                            clearTimeout(timeout);
+                            if (chrome.runtime.lastError) {
+                                reject(new Error(chrome.runtime.lastError.message));
+                            } else {
+                                resolve(response);
+                            }
+                        });
+                    });
+
+                    if (response && response.success) {
+                        log('settingsLog', `✅ Settings update ${i} successful`, 'success');
+                    } else {
+                        log('settingsLog', `❌ Settings update ${i} failed: ${JSON.stringify(response)}`, 'error');
+                    }
+                } catch (error) {
+                    log('settingsLog', `❌ Settings update ${i} error: ${error.message}`, 'error');
+                }
+                
+                // Delay between updates
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
+
+        async function stressTest() {
+            log('stressLog', '🔄 Starting stress test...', 'info');
+            
+            const tests = [];
+            
+            // Mix of PING and SETTINGS_UPDATED messages
+            for (let i = 1; i <= 10; i++) {
+                if (i % 2 === 0) {
+                    // PING test
+                    tests.push(async () => {
+                        try {
+                            const response = await new Promise((resolve, reject) => {
+                                const timeout = setTimeout(() => {
+                                    reject(new Error('PING timeout'));
+                                }, 3000);
+
+                                chrome.runtime.sendMessage({ type: 'PING' }, (response) => {
+                                    clearTimeout(timeout);
+                                    if (chrome.runtime.lastError) {
+                                        reject(new Error(chrome.runtime.lastError.message));
+                                    } else {
+                                        resolve(response);
+                                    }
+                                });
+                            });
+
+                            if (response && response.success) {
+                                log('stressLog', `✅ Stress PING ${i} successful`, 'success');
+                                return true;
+                            } else {
+                                log('stressLog', `❌ Stress PING ${i} failed`, 'error');
+                                return false;
+                            }
+                        } catch (error) {
+                            log('stressLog', `❌ Stress PING ${i} error: ${error.message}`, 'error');
+                            return false;
+                        }
+                    });
+                } else {
+                    // Settings test
+                    tests.push(async () => {
+                        try {
+                            const testSettings = {
+                                breakInterval: 30 + i,
+                                testId: i,
+                                timestamp: Date.now()
+                            };
+
+                            const response = await new Promise((resolve, reject) => {
+                                const timeout = setTimeout(() => {
+                                    reject(new Error('Settings timeout'));
+                                }, 5000);
+
+                                chrome.runtime.sendMessage({
+                                    type: 'SETTINGS_UPDATED',
+                                    data: { settings: testSettings }
+                                }, (response) => {
+                                    clearTimeout(timeout);
+                                    if (chrome.runtime.lastError) {
+                                        reject(new Error(chrome.runtime.lastError.message));
+                                    } else {
+                                        resolve(response);
+                                    }
+                                });
+                            });
+
+                            if (response && response.success) {
+                                log('stressLog', `✅ Stress Settings ${i} successful`, 'success');
+                                return true;
+                            } else {
+                                log('stressLog', `❌ Stress Settings ${i} failed`, 'error');
+                                return false;
+                            }
+                        } catch (error) {
+                            log('stressLog', `❌ Stress Settings ${i} error: ${error.message}`, 'error');
+                            return false;
+                        }
+                    });
+                }
+            }
+
+            // Run all tests with some concurrency
+            let successCount = 0;
+            let totalCount = tests.length;
+
+            for (let i = 0; i < tests.length; i += 2) {
+                const batch = tests.slice(i, i + 2);
+                const results = await Promise.all(batch.map(test => test()));
+                successCount += results.filter(r => r).length;
+                
+                // Small delay between batches
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+
+            log('stressLog', `🏁 Stress test completed: ${successCount}/${totalCount} successful`, 
+                successCount === totalCount ? 'success' : 'warning');
+        }
+
+        function clearLogs() {
+            document.getElementById('pingLog').innerHTML = '';
+            document.getElementById('settingsLog').innerHTML = '';
+            document.getElementById('stressLog').innerHTML = '';
+        }
+
+        // Auto-run a basic test on page load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                log('pingLog', '🚀 Auto-testing service worker communication...', 'info');
+                testPing();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

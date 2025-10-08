@@ -17,35 +17,49 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
-  const root = createRoot(container);
+  // Clear any existing content to prevent DOM conflicts
+  container.innerHTML = '';
 
-  const handleStartBreak = (breakType: BreakType) => {
-    // Send message to background script to start break
-    chrome.runtime.sendMessage({
-      action: 'START_BREAK',
-      breakType: breakType
-    }, (response) => {
-      if (response?.success) {
-        // Close popup after starting break
-        window.close();
-      } else {
-        console.error('Failed to start break:', response?.error);
-      }
-    });
-  };
+  try {
+    const root = createRoot(container);
 
-  const handleOpenSettings = () => {
-    // Open options page (dashboard)
-    chrome.runtime.openOptionsPage();
-    window.close();
-  };
+    const handleStartBreak = (breakType: BreakType) => {
+      // Send message to background script to start break
+      chrome.runtime.sendMessage({
+        action: 'START_BREAK',
+        breakType: breakType
+      }, (response) => {
+        if (response?.success) {
+          // Close popup after starting break
+          window.close();
+        } else {
+          console.error('Failed to start break:', response?.error);
+        }
+      });
+    };
 
-  root.render(
-    <Popup 
-      onStartBreak={handleStartBreak}
-      onOpenSettings={handleOpenSettings}
-    />
-  );
+    const handleOpenSettings = () => {
+      // Open options page (dashboard)
+      chrome.runtime.openOptionsPage();
+      window.close();
+    };
+
+    root.render(
+      <Popup 
+        onStartBreak={handleStartBreak}
+        onOpenSettings={handleOpenSettings}
+      />
+    );
+  } catch (error) {
+    console.error('Failed to initialize popup React root:', error);
+    // Fallback error display
+    container.innerHTML = `
+      <div style="padding: 20px; text-align: center; color: red;">
+        <h3>Failed to load popup</h3>
+        <p>Please try reloading the extension.</p>
+      </div>
+    `;
+  }
 });
 
 // Handle any runtime errors

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Alarms</title>
+</head>
+<body>
+    <h1>EyeZen Alarm Debug</h1>
+    <div id="output"></div>
+    
+    <script>
+        async function debugAlarms() {
+            const output = document.getElementById('output');
+            
+            try {
+                // Check current alarms
+                const alarms = await chrome.alarms.getAll();
+                output.innerHTML += '<h2>Current Alarms:</h2>';
+                output.innerHTML += '<pre>' + JSON.stringify(alarms, null, 2) + '</pre>';
+                
+                // Check storage
+                const storage = await chrome.storage.local.get(['eyezen_user_data']);
+                output.innerHTML += '<h2>User Settings:</h2>';
+                if (storage.eyezen_user_data) {
+                    output.innerHTML += '<pre>' + JSON.stringify(storage.eyezen_user_data.settings, null, 2) + '</pre>';
+                } else {
+                    output.innerHTML += '<p>No user data found</p>';
+                }
+                
+                // Test alarm creation
+                output.innerHTML += '<h2>Testing Alarm Creation:</h2>';
+                try {
+                    await chrome.alarms.create('test-alarm', {
+                        delayInMinutes: 1,
+                        periodInMinutes: 1
+                    });
+                    output.innerHTML += '<p>✅ Test alarm created successfully</p>';
+                    
+                    // Check if it was created
+                    const testAlarm = await chrome.alarms.get('test-alarm');
+                    output.innerHTML += '<pre>Test alarm: ' + JSON.stringify(testAlarm, null, 2) + '</pre>';
+                    
+                    // Clean up
+                    await chrome.alarms.clear('test-alarm');
+                    output.innerHTML += '<p>🧹 Test alarm cleaned up</p>';
+                } catch (error) {
+                    output.innerHTML += '<p>❌ Failed to create test alarm: ' + error.message + '</p>';
+                }
+                
+            } catch (error) {
+                output.innerHTML += '<p>Error: ' + error.message + '</p>';
+            }
+        }
+        
+        // Run debug when page loads
+        debugAlarms();
+        
+        // Add button to refresh
+        document.body.innerHTML += '<button onclick="location.reload()">Refresh</button>';
+    </script>
+</body>
+</html>

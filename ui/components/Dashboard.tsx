@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DashboardProps, UserData, UserSettings, EyeMetrics, BreakSession, WeeklySummary } from '../../types/index';
 import { ChromeStorageService } from '../../core/storage/index';
+import { sendTestNotification } from '../../core/utils/service-worker-communication';
 import LoginModal from './LoginModal';
 
 // AI Service interfaces
@@ -47,9 +48,13 @@ interface DashboardState {
   loginLoading: boolean;
   loginError: string | null;
   userDashboardData: any | null;
+  // Settings states
+  tempReminderInterval: number | null;
+  isSaving: boolean;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExportData, onEraseData }) => {
+  const mountedRef = React.useRef(true);
   const [state, setState] = useState<DashboardState>({
     activeTab: 'overview',
     isLoading: true,
@@ -69,8 +74,18 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
     showLoginModal: false,
     loginLoading: false,
     loginError: null,
-    userDashboardData: null
+    userDashboardData: null,
+    // Settings initial states
+    tempReminderInterval: null,
+    isSaving: false
   });
+
+  // Safe setState that checks if component is still mounted
+  const safeSetState = React.useCallback((updater: React.SetStateAction<DashboardState>) => {
+    if (mountedRef.current) {
+      setState(updater);
+    }
+  }, []);
 
   useEffect(() => {
     loadDashboardData();
@@ -127,6 +142,43 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
 
   const handleSettingChange = (key: keyof UserSettings, value: string | number | boolean) => {
     onUpdateSettings({ [key]: value });
+    if (key === 'reminderInterval') {
+      console.log("Check if here in receiving reminderInterval")
+      // The onUpdateSettings already handles the chrome.storage.sync communication
+      // through the service worker message system, so no need for direct chrome.storage calls
+    }
+  };
+
+  const handleReminderIntervalChange = (value: number) => {
+    setState(prev => ({ ...prev, 了: value }));
+  };
+
+  const saveReminderInterval = async () => {
+    if (state.tempReminderInterval === null) return;
+    
+    setState(prev => ({ ...prev, isSaving: true }));
+    
+    try {
+      // Update the settings
+      onUpdateSettings({ reminderInterval: state.tempReminderInterval });
+      
+      // Send a test notification to confirm the change using safe communication
+      const response = await sendTestNotification(
+        '⏰ Reminder Interval Updated!',
+        `Break reminders are now set to every ${state.tempReminderInterval} minute${state.tempReminderInterval !== 1 ? 's' : ''}`,
+        'high'
+      );
+      
+      if (!response.success) {
+        console.warn('Failed to send test notification:', response.error);
+      }
+      
+      // Clear temporary state
+      setState(prev => ({ ...prev, tempReminderInterval: null, isSaving: false }));
+    } catch (error) {
+      console.error('Failed to save reminder interval:', error);
+      setState(prev => ({ ...prev, isSaving: false }));
+    }
   };
 
   // Authentication functions
@@ -165,15 +217,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
 
   const loadUserDashboardData = async (email: string) => {
     try {
-      // Simulate API call to load user-specific dashboard data
-      const response = await fetch(`/api/dashboard/${email}`);
-      if (response.ok) {
-        const dashboardData = await response.json();
-        setState(prev => ({ ...prev, userDashboardData: dashboardData }));
-      }
-    } catch (error) {
-      console.error('Failed to load user dashboard data:', error);
-      // For demo purposes, create mock user data
+      console.log(`Loading dashboard data for user: ${email}`);
+      // Use mock user data directly (API endpoint not available)
       const mockUserData = {
         goals: {
           daily: { breaks: 8, eyeScore: 85, completed: 6 },
@@ -192,6 +237,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
         }
       };
       setState(prev => ({ ...prev, userDashboardData: mockUserData }));
+    } catch (error) {
+      console.error('Failed to load user dashboard data:', error);
+      setState(prev => ({ ...prev, userDashboardData: null }));
     }
   };
 
@@ -362,6 +410,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
   useEffect(() => {
     console.log('Dashboard mounted, checking login status...');
     checkLoginStatus();
+    
+    // Sync reminder interval from chrome.storage.sync on mount
+    chrome?.storage?.sync?.get?.('reminderInterval').then((res) => {
+      const v = res?.reminderInterval;
+      if (typeof v === 'number') onUpdateSettings({ reminderInterval: v });
+    }).catch(() => {
+      // Silently ignore errors in non-extension environments
+    });
     
     // Listen for storage changes to sync authentication state
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
@@ -654,18 +710,44 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                   <div>
                     <label className="block text-sm font-medium text-orange-700 mb-2">Reminder Interval (minutes)</label>
-                    <select
-                      value={userData.settings.reminderInterval || 20}
-                      onChange={(e) => handleSettingChange('reminderInterval', parseInt(e.target.value))}
-                      className="w-full px-3 py-2 bg-white border border-orange-200 rounded-lg focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                    >
-                      <option value={1}>1 minute</option>
-                      <option value={15}>15 minutes</option>
-                      <option value={20}>20 minutes (recommended)</option>
-                      <option value={30}>30 minutes</option>
-                      <option value={45}>45 minutes</option>
-                      <option value={60}>1 hour</option>
-                    </select>
+                    <div className="space-y-3">
+                      <select
+                        value={state.tempReminderInterval ?? (userData.settings.reminderInterval || 20)}
+                        onChange={(e) => handleReminderIntervalChange(parseInt(e.target.value))}
+                        className="w-full px-3 py-2 bg-white border border-orange-200 rounded-lg focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      >
+                        <option value={1}>1 minute</option>
+                        <option value={15}>15 minutes</option>
+                        <option value={20}>20 minutes (recommended)</option>
+                        <option value={30}>30 minutes</option>
+                        <option value={45}>45 minutes</option>
+                        <option value={60}>1 hour</option>
+                      </select>
+                      {state.tempReminderInterval !== null && (
+                        <button
+                          onClick={saveReminderInterval}
+                          disabled={state.isSaving}
+                          className="w-full px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white font-medium rounded-lg hover:from-orange-600 hover:to-red-600 focus:ring-2 focus:ring-orange-300 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                        >
+                          {state.isSaving ? (
+                            <>
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              <span>Saving...</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              <span>Save & Test Notification</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   
                   <div>

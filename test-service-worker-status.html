@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Service Worker Status Test</title>
+</head>
+<body>
+    <h1>Service Worker Status Test</h1>
+    <div id="status">Testing...</div>
+    <button id="testMessage">Send Test Message</button>
+    <div id="results"></div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const resultsDiv = document.getElementById('results');
+        const testButton = document.getElementById('testMessage');
+
+        function log(message) {
+            console.log(message);
+            resultsDiv.innerHTML += `<p>${new Date().toLocaleTimeString()}: ${message}</p>`;
+        }
+
+        // Test if service worker is registered
+        if ('serviceWorker' in navigator) {
+            log('✅ Service Worker API is available');
+        } else {
+            log('❌ Service Worker API not available');
+        }
+
+        // Test Chrome extension runtime
+        if (typeof chrome !== 'undefined' && chrome.runtime) {
+            log('✅ Chrome runtime is available');
+            log(`Extension ID: ${chrome.runtime.id}`);
+            
+            // Test sending a message to the service worker
+            testButton.addEventListener('click', async () => {
+                log('📤 Sending test message to service worker...');
+                try {
+                    const response = await chrome.runtime.sendMessage({
+                        type: 'POPUP_TEST',
+                        data: 'Test from status page',
+                        timestamp: Date.now()
+                    });
+                    log(`✅ Service worker responded: ${JSON.stringify(response)}`);
+                } catch (error) {
+                    log(`❌ Service worker error: ${error.message}`);
+                }
+            });
+            
+            // Check if we can get background page info
+            chrome.runtime.getBackgroundPage((backgroundPage) => {
+                if (chrome.runtime.lastError) {
+                    log(`❌ Background page error: ${chrome.runtime.lastError.message}`);
+                } else if (backgroundPage) {
+                    log('✅ Background page is accessible');
+                } else {
+                    log('⚠️ Background page is null (normal for service workers)');
+                }
+            });
+            
+        } else {
+            log('❌ Chrome runtime not available');
+        }
+
+        statusDiv.textContent = 'Test completed - check results below';
+    </script>
+</body>
+</html>

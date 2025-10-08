@@ -17,6 +17,7 @@ declare class BackgroundService {
     private handlePostureCheck;
     private handleDailySummary;
     private handleWeeklySummary;
+    private handleEyeZenBreakReminder;
     private startBreak;
     private endBreak;
     private updateSettings;

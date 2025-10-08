@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Settings Message</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .log { margin: 5px 0; padding: 5px; border-radius: 3px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Test Settings Message Communication</h1>
+    <button onclick="testSettingsMessage()">Test SETTINGS_UPDATED Message</button>
+    <button onclick="testServiceWorkerStatus()">Check Service Worker Status</button>
+    <button onclick="clearLogs()">Clear Logs</button>
+    
+    <div id="logs"></div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const logDiv = document.createElement('div');
+            logDiv.className = `log ${type}`;
+            logDiv.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logsDiv.appendChild(logDiv);
+            console.log(message);
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+
+        async function testServiceWorkerStatus() {
+            log('Testing service worker status...', 'info');
+            
+            if (!chrome || !chrome.runtime) {
+                log('❌ Chrome runtime API not available', 'error');
+                return;
+            }
+
+            try {
+                const response = await new Promise((resolve, reject) => {
+                    chrome.runtime.sendMessage({ action: 'GET_STATUS' }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            reject(chrome.runtime.lastError);
+                        } else {
+                            resolve(response);
+                        }
+                    });
+                });
+                
+                log('✅ Service worker is responding: ' + JSON.stringify(response), 'success');
+            } catch (error) {
+                log('❌ Service worker not responding: ' + error.message, 'error');
+            }
+        }
+
+        async function testSettingsMessage() {
+            log('Testing SETTINGS_UPDATED message...', 'info');
+            
+            if (!chrome || !chrome.runtime) {
+                log('❌ Chrome runtime API not available', 'error');
+                return;
+            }
+
+            const testSettings = {
+                reminderInterval: 2,
+                reminderEnabled: true,
+                notifications: true
+            };
+
+            try {
+                const response = await new Promise((resolve, reject) => {
+                    chrome.runtime.sendMessage({
+                        type: 'SETTINGS_UPDATED',
+                        data: { settings: testSettings },
+                        timestamp: Date.now()
+                    }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            reject(chrome.runtime.lastError);
+                        } else {
+                            resolve(response);
+                        }
+                    });
+                });
+                
+                log('✅ SETTINGS_UPDATED message sent successfully: ' + JSON.stringify(response), 'success');
+                log('📋 Test settings sent: ' + JSON.stringify(testSettings), 'info');
+            } catch (error) {
+                log('❌ Failed to send SETTINGS_UPDATED message: ' + error.message, 'error');
+                log('❌ Error details: ' + JSON.stringify(error), 'error');
+            }
+        }
+
+        // Auto-run status check on load
+        document.addEventListener('DOMContentLoaded', () => {
+            log('🚀 Test page loaded', 'info');
+            setTimeout(testServiceWorkerStatus, 500);
+        });
+    </script>
+</body>
+</html>

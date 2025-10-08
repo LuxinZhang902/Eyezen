@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Extension Error Checker</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .error { color: red; background: #ffe6e6; padding: 10px; margin: 10px 0; }
+        .success { color: green; background: #e6ffe6; padding: 10px; margin: 10px 0; }
+        .info { color: blue; background: #e6f3ff; padding: 10px; margin: 10px 0; }
+        button { padding: 10px 20px; margin: 5px; }
+        #results { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Extension Error Checker</h1>
+    <p>This page will help diagnose why the service worker isn't showing logs.</p>
+    
+    <button id="checkExtension">Check Extension Status</button>
+    <button id="testServiceWorker">Test Service Worker</button>
+    <button id="forceReload">Force Extension Reload</button>
+    
+    <div id="results"></div>
+
+    <script>
+        const results = document.getElementById('results');
+        
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = type;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            results.appendChild(div);
+            console.log(message);
+        }
+
+        // Check basic extension availability
+        document.getElementById('checkExtension').addEventListener('click', () => {
+            results.innerHTML = '';
+            log('🔍 Checking extension status...', 'info');
+            
+            if (typeof chrome === 'undefined') {
+                log('❌ Chrome APIs not available - not running in extension context', 'error');
+                return;
+            }
+            
+            if (!chrome.runtime) {
+                log('❌ Chrome runtime not available', 'error');
+                return;
+            }
+            
+            log(`✅ Extension ID: ${chrome.runtime.id}`, 'success');
+            log(`✅ Chrome version: ${navigator.userAgent.match(/Chrome\/(\d+)/)?.[1] || 'Unknown'}`, 'info');
+            
+            // Check manifest
+            const manifest = chrome.runtime.getManifest();
+            log(`✅ Manifest version: ${manifest.manifest_version}`, 'info');
+            log(`✅ Extension name: ${manifest.name}`, 'info');
+            log(`✅ Extension version: ${manifest.version}`, 'info');
+            
+            if (manifest.background) {
+                log(`✅ Background script: ${manifest.background.service_worker || manifest.background.scripts}`, 'info');
+            } else {
+                log('❌ No background script configured in manifest', 'error');
+            }
+        });
+
+        // Test service worker communication
+        document.getElementById('testServiceWorker').addEventListener('click', async () => {
+            log('📤 Testing service worker communication...', 'info');
+            
+            try {
+                // Test 1: Simple ping
+                log('Test 1: Sending POPUP_TEST message...', 'info');
+                const response1 = await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        reject(new Error('Timeout after 5 seconds'));
+                    }, 5000);
+                    
+                    chrome.runtime.sendMessage({
+                        type: 'POPUP_TEST',
+                        data: 'Test from error checker'
+                    }, (response) => {
+                        clearTimeout(timeout);
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message));
+                        } else {
+                            resolve(response);
+                        }
+                    });
+                });
+                
+                log(`✅ Service worker responded: ${JSON.stringify(response1)}`, 'success');
+                
+                // Test 2: Settings update
+                log('Test 2: Sending SETTINGS_UPDATED message...', 'info');
+                const response2 = await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        reject(new Error('Timeout after 5 seconds'));
+                    }, 5000);
+                    
+                    chrome.runtime.sendMessage({
+                        type: 'SETTINGS_UPDATED',
+                        data: {
+                            settings: {
+                                reminderInterval: 1,
+                                reminderEnabled: true
+                            }
+                        }
+                    }, (response) => {
+                        clearTimeout(timeout);
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message));
+                        } else {
+                            resolve(response);
+                        }
+                    });
+                });
+                
+                log(`✅ Settings update responded: ${JSON.stringify(response2)}`, 'success');
+                
+            } catch (error) {
+                log(`❌ Service worker error: ${error.message}`, 'error');
+                
+                if (error.message.includes('Could not establish connection')) {
+                    log('💡 This error means the service worker is not running or not responding', 'info');
+                    log('💡 Possible causes:', 'info');
+                    log('   • Service worker failed to load due to syntax/import errors', 'info');
+                    log('   • Service worker crashed during initialization', 'info');
+                    log('   • Extension is disabled or not properly installed', 'info');
+                }
+            }
+        });
+
+        // Force extension reload
+        document.getElementById('forceReload').addEventListener('click', () => {
+            log('🔄 Attempting to reload extension...', 'info');
+            try {
+                chrome.runtime.reload();
+                log('✅ Extension reload initiated', 'success');
+                log('💡 Check the service worker console now for initialization logs', 'info');
+            } catch (error) {
+                log(`❌ Failed to reload extension: ${error.message}`, 'error');
+            }
+        });
+
+        // Auto-run basic check on load
+        window.addEventListener('load', () => {
+            document.getElementById('checkExtension').click();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Service Worker</title>
+</head>
+<body>
+    <h1>EyeZen Service Worker Test</h1>
+    <div id="output"></div>
+    <button onclick="testServiceWorker()">Test Service Worker</button>
+    <button onclick="checkAlarms()">Check Alarms</button>
+    <button onclick="forceRecreateAlarms()">Force Recreate Alarms</button>
+    
+    <script>
+        const output = document.getElementById('output');
+        
+        function log(message) {
+            output.innerHTML += '<p>' + new Date().toLocaleTimeString() + ': ' + message + '</p>';
+        }
+        
+        async function testServiceWorker() {
+            log('Testing service worker...');
+            try {
+                // Check if Chrome extension APIs are available
+                if (typeof chrome === 'undefined' || !chrome.runtime) {
+                    log('❌ Chrome extension APIs not available. This page needs to be loaded in an extension context.');
+                    return;
+                }
+                
+                const response = await chrome.runtime.sendMessage({action: 'getStatus'});
+                log('✅ Service worker responded: ' + JSON.stringify(response));
+            } catch (error) {
+                log('❌ Service worker error: ' + error.message);
+            }
+        }
+        
+        async function checkAlarms() {
+            log('Checking current alarms...');
+            try {
+                // Check if Chrome extension APIs are available
+                if (typeof chrome === 'undefined' || !chrome.alarms) {
+                    log('❌ Chrome extension APIs not available. Make sure this page is loaded as an extension page.');
+                    return;
+                }
+                
+                const alarms = await chrome.alarms.getAll();
+                log('Current alarms: ' + JSON.stringify(alarms, null, 2));
+                
+                // Check storage
+                if (chrome.storage && chrome.storage.local) {
+                    const storage = await chrome.storage.local.get(['eyezen_user_data']);
+                    if (storage.eyezen_user_data) {
+                        log('User settings: reminderEnabled=' + storage.eyezen_user_data.settings.reminderEnabled + 
+                            ', reminderInterval=' + storage.eyezen_user_data.settings.reminderInterval);
+                    } else {
+                        log('❌ No user data found in storage');
+                    }
+                } else {
+                    log('❌ Chrome storage API not available');
+                }
+            } catch (error) {
+                log('❌ Error checking alarms: ' + error.message);
+            }
+        }
+        
+        async function forceRecreateAlarms() {
+            log('Forcing alarm recreation...');
+            try {
+                // Check if Chrome extension APIs are available
+                if (typeof chrome === 'undefined' || !chrome.runtime) {
+                    log('❌ Chrome extension APIs not available. This page needs to be loaded in an extension context.');
+                    return;
+                }
+                
+                // Send message to service worker to recreate alarms
+                const response = await chrome.runtime.sendMessage({action: 'updateSettings', settings: {}});
+                log('✅ Forced alarm recreation: ' + JSON.stringify(response));
+                
+                // Wait a bit then check alarms
+                setTimeout(checkAlarms, 1000);
+            } catch (error) {
+                log('❌ Error forcing recreation: ' + error.message);
+            }
+        }
+        
+        // Auto-run initial checks
+        setTimeout(() => {
+            testServiceWorker();
+            setTimeout(checkAlarms, 500);
+        }, 100);
+    </script>
+</body>
+</html>

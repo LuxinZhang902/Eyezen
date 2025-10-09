@@ -32,7 +32,7 @@ const ReminderModal: React.FC<ReminderModalProps> = ({
       try {
         // Get current alarms
         const alarms = await chrome.alarms.getAll();
-        const reminderAlarm = alarms.find(alarm => alarm.name === 'eyezen_break_reminder');
+        const reminderAlarm = alarms.find(alarm => alarm.name === 'break-reminder');
         
         if (reminderAlarm) {
           const now = Date.now();

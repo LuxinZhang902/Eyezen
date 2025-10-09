@@ -69,7 +69,7 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     },
     realtimeScore: -1, // Start with -1 to show placeholder until real data is available
     isLoading: true,
-    cameraEnabled: true,
+    cameraEnabled: false, // Start with false to avoid premature validation
     lastBreakTime: null,
     streakDays: 0,
     showCameraPermissionPopup: false,
@@ -92,8 +92,12 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     loadUserData();
     loadLoginState();
     
-    // Set up periodic updates
-    const interval = setInterval(loadUserData, 30000); // Update every 30 seconds
+    // Set up periodic updates (only when camera is enabled)
+    const interval = setInterval(() => {
+      if (state.cameraEnabled) {
+        loadUserData();
+      }
+    }, 30000); // Update every 30 seconds when camera is open
     
     // Set up periodic permission check to detect manual permission changes
     const permissionCheckInterval = setInterval(checkCameraPermissionStatus, 5000); // Check every 5 seconds
@@ -121,6 +125,10 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       setTimeout(() => {
         console.log('🧪 POPUP: Sending test message to service worker');
         chrome.runtime.sendMessage({ type: 'POPUP_TEST', data: 'Hello from popup' }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log('🧪 POPUP: Test message failed (service worker may not be ready):', chrome.runtime.lastError.message);
+            return;
+          }
           console.log('🧪 POPUP: Test message response:', response);
         });
       }, 1000);
@@ -903,15 +911,17 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
   // Alarm/Reminder Functions
   const handleSetReminder = async (intervalMinutes: number) => {
     try {
-      // Clear any existing alarm
+      // Clear any existing alarms (both old and new names for compatibility)
       await chrome.alarms.clear('eyezen_break_reminder');
+      await chrome.alarms.clear('break-reminder');
       
-      // Create new alarm
-      await chrome.alarms.create('eyezen_break_reminder', {
+      // Create new alarm using the same name as service worker
+      await chrome.alarms.create('break-reminder', {
         delayInMinutes: intervalMinutes,
         periodInMinutes: intervalMinutes
       });
       
+      console.log('Break reminder set for every', intervalMinutes, 'minutes');
       // Save reminder settings
       await chrome.storage.local.set({
         eyezen_reminder: {
@@ -919,6 +929,11 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
           interval: intervalMinutes,
           setAt: Date.now()
         }
+      });
+      console.log('Reminder settings saved:', {
+        isActive: true,
+        interval: intervalMinutes,
+        setAt: Date.now()
       });
       
       setState(prev => ({
@@ -937,8 +952,9 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
 
   const handleClearReminder = async () => {
     try {
-      // Clear the alarm
+      // Clear the alarms (both old and new names for compatibility)
       await chrome.alarms.clear('eyezen_break_reminder');
+      await chrome.alarms.clear('break-reminder');
       
       // Clear reminder settings
       await chrome.storage.local.remove(['eyezen_reminder']);

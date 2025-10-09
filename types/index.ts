@@ -241,7 +241,7 @@ export type OptionalFields<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, 
 
 // Constants
 export const DEFAULT_SETTINGS: UserSettings = {
-  cameraEnabled: true,
+  cameraEnabled: false,
   detectionSensitivity: 'medium',
   fatigueThreshold: 70,
   reminderEnabled: true,

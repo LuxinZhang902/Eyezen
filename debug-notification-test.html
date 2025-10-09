@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EyeZen Notification Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .button:hover {
+            background: #45a049;
+        }
+        .log {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .info { color: #2196F3; }
+        .warning { color: #ff9800; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 EyeZen Notification Test</h1>
+        <p>This page tests notification functionality for the EyeZen extension.</p>
+        
+        <div>
+            <button class="button" onclick="checkPermissions()">Check Permissions</button>
+            <button class="button" onclick="testBasicNotification()">Test Basic Notification</button>
+            <button class="button" onclick="testBreakNotification()">Test Break Notification</button>
+            <button class="button" onclick="create2MinAlarm()">Create 2-Min Test Alarm</button>
+            <button class="button" onclick="checkAlarms()">Check Active Alarms</button>
+            <button class="button" onclick="clearAllAlarms()">Clear All Alarms</button>
+            <button class="button" onclick="checkServiceWorker()">Check Service Worker</button>
+            <button class="button" onclick="clearLog()">Clear Log</button>
+        </div>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type;
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        async function checkPermissions() {
+            log('🔍 Checking notification permissions...', 'info');
+            
+            try {
+                if (!chrome || !chrome.permissions) {
+                    log('❌ Chrome permissions API not available', 'error');
+                    return;
+                }
+
+                const hasNotifications = await chrome.permissions.contains({
+                    permissions: ['notifications']
+                });
+                
+                log(`📋 Notification permission: ${hasNotifications ? '✅ Granted' : '❌ Not granted'}`, hasNotifications ? 'success' : 'error');
+
+                const hasAlarms = await chrome.permissions.contains({
+                    permissions: ['alarms']
+                });
+                
+                log(`📋 Alarms permission: ${hasAlarms ? '✅ Granted' : '❌ Not granted'}`, hasAlarms ? 'success' : 'error');
+
+            } catch (error) {
+                log(`❌ Error checking permissions: ${error.message}`, 'error');
+            }
+        }
+
+        async function testBasicNotification() {
+            log('🔔 Testing basic notification...', 'info');
+            
+            try {
+                if (!chrome || !chrome.notifications) {
+                    log('❌ Chrome notifications API not available', 'error');
+                    return;
+                }
+
+                const notificationId = `test-${Date.now()}`;
+                await chrome.notifications.create(notificationId, {
+                    type: 'basic',
+                    iconUrl: 'assets/icons/icon-48.png',
+                    title: 'EyeZen Test',
+                    message: 'This is a test notification from EyeZen!'
+                });
+
+                log(`✅ Basic notification created: ${notificationId}`, 'success');
+                
+                // Auto-clear after 5 seconds
+                setTimeout(() => {
+                    chrome.notifications.clear(notificationId);
+                    log(`🧹 Cleared test notification: ${notificationId}`, 'info');
+                }, 5000);
+
+            } catch (error) {
+                log(`❌ Error creating basic notification: ${error.message}`, 'error');
+            }
+        }
+
+        async function testBreakNotification() {
+            log('👁️ Testing break reminder notification...', 'info');
+            
+            try {
+                if (!chrome || !chrome.notifications) {
+                    log('❌ Chrome notifications API not available', 'error');
+                    return;
+                }
+
+                const notificationId = `break-test-${Date.now()}`;
+                await chrome.notifications.create(notificationId, {
+                    type: 'basic',
+                    iconUrl: 'assets/icons/icon-48.png',
+                    title: '👁️ Time for an Eye Break!',
+                    message: 'It\'s been 2 minutes. Take a moment to rest your eyes.',
+                    buttons: [
+                        { title: 'Take Break Now' },
+                        { title: 'Snooze 5 min' }
+                    ],
+                    priority: 2
+                });
+
+                log(`✅ Break notification created: ${notificationId}`, 'success');
+                
+                // Auto-clear after 10 seconds
+                setTimeout(() => {
+                    chrome.notifications.clear(notificationId);
+                    log(`🧹 Cleared break notification: ${notificationId}`, 'info');
+                }, 10000);
+
+            } catch (error) {
+                log(`❌ Error creating break notification: ${error.message}`, 'error');
+            }
+        }
+
+        async function create2MinAlarm() {
+            log('⏰ Creating 2-minute test alarm...', 'info');
+            
+            try {
+                if (!chrome || !chrome.alarms) {
+                    log('❌ Chrome alarms API not available', 'error');
+                    return;
+                }
+
+                // Clear existing test alarms first
+                await chrome.alarms.clear('eyezen_break_reminder');
+                log('🧹 Cleared existing eyezen_break_reminder alarm', 'info');
+
+                // Create 2-minute alarm
+                await chrome.alarms.create('eyezen_break_reminder', {
+                    delayInMinutes: 2
+                });
+
+                log('✅ 2-minute alarm created successfully', 'success');
+                
+                // Also update storage to mark reminder as active
+                await chrome.storage.local.set({
+                    eyezen_reminder: {
+                        isActive: true,
+                        interval: 2
+                    }
+                });
+                
+                log('✅ Storage updated with active reminder', 'success');
+                
+                setTimeout(checkAlarms, 500);
+
+            } catch (error) {
+                log(`❌ Error creating 2-minute alarm: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkAlarms() {
+            log('📋 Checking active alarms...', 'info');
+            
+            try {
+                if (!chrome || !chrome.alarms) {
+                    log('❌ Chrome alarms API not available', 'error');
+                    return;
+                }
+
+                const alarms = await chrome.alarms.getAll();
+                log(`📊 Found ${alarms.length} active alarms:`, 'info');
+                
+                if (alarms.length === 0) {
+                    log('  No active alarms found', 'warning');
+                } else {
+                    alarms.forEach(alarm => {
+                        const scheduledTime = new Date(alarm.scheduledTime).toLocaleString();
+                        const timeUntil = Math.round((alarm.scheduledTime - Date.now()) / 1000);
+                        log(`  - ${alarm.name}: ${scheduledTime} (in ${timeUntil}s)`, 'info');
+                    });
+                }
+
+            } catch (error) {
+                log(`❌ Error checking alarms: ${error.message}`, 'error');
+            }
+        }
+
+        async function clearAllAlarms() {
+            log('🧹 Clearing all alarms...', 'info');
+            
+            try {
+                if (!chrome || !chrome.alarms) {
+                    log('❌ Chrome alarms API not available', 'error');
+                    return;
+                }
+
+                await chrome.alarms.clearAll();
+                log('✅ All alarms cleared', 'success');
+                
+                // Also clear storage
+                await chrome.storage.local.remove(['eyezen_reminder']);
+                log('✅ Storage cleared', 'success');
+
+            } catch (error) {
+                log(`❌ Error clearing alarms: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkServiceWorker() {
+            log('🔧 Checking service worker status...', 'info');
+            
+            try {
+                if (!chrome || !chrome.runtime) {
+                    log('❌ Chrome runtime API not available', 'error');
+                    return;
+                }
+
+                const response = await chrome.runtime.sendMessage({ action: 'GET_STATUS' });
+                log(`✅ Service worker response: ${JSON.stringify(response)}`, 'success');
+
+            } catch (error) {
+                log(`❌ Service worker error: ${error.message}`, 'error');
+                
+                if (error.message.includes('Could not establish connection')) {
+                    log('🔍 Service worker may not be running or responding', 'warning');
+                }
+            }
+        }
+
+        // Listen for alarm events
+        if (chrome && chrome.alarms) {
+            chrome.alarms.onAlarm.addListener((alarm) => {
+                log(`🚨 ALARM FIRED: ${alarm.name} at ${new Date().toLocaleString()}`, 'success');
+            });
+            log('👂 Alarm listener registered', 'info');
+        }
+
+        // Listen for notification events
+        if (chrome && chrome.notifications) {
+            chrome.notifications.onClicked.addListener((notificationId) => {
+                log(`🔔 Notification clicked: ${notificationId}`, 'info');
+            });
+
+            chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
+                log(`🔘 Notification button clicked: ${notificationId}, button ${buttonIndex}`, 'info');
+            });
+
+            chrome.notifications.onClosed.addListener((notificationId, byUser) => {
+                log(`🔕 Notification closed: ${notificationId}, by user: ${byUser}`, 'info');
+            });
+            
+            log('👂 Notification listeners registered', 'info');
+        }
+
+        // Initialize
+        log('🚀 Notification test page loaded', 'info');
+        setTimeout(() => {
+            checkPermissions();
+            checkAlarms();
+        }, 500);
+    </script>
+</body>
+</html>

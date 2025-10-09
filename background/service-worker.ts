@@ -74,15 +74,6 @@ class BackgroundService {
       });
       console.log('✅ Alarm listener registered');
       
-      // Test if alarm listener is working by creating a test alarm
-      console.log('🧪 Creating test alarm to verify listener...');
-      try {
-        await chrome.alarms.create('test-listener', { delayInMinutes: 0.5 }); // 30 seconds (minimum allowed)
-        console.log('✅ Test alarm created successfully');
-      } catch (error) {
-        console.error('❌ Failed to create test alarm:', error);
-      }
-      
       // Set up message listeners
       console.log('📬 Setting up message listener...');
       chrome.runtime.onMessage.addListener(this.handleMessage.bind(this));
@@ -115,9 +106,6 @@ class BackgroundService {
     
     try {
       switch (alarm.name) {
-        case 'test-listener':
-          console.log('🧪 TEST ALARM TRIGGERED! Alarm listener is working correctly!');
-          break;
         case ALARM_NAMES.BREAK_REMINDER:
           console.log('👁️ Processing break reminder alarm');
           await this.handleBreakReminder();
@@ -252,8 +240,11 @@ class BackgroundService {
         }
         
         // Try to forward to extension contexts
-        chrome.runtime.sendMessage(message).catch((error) => {
-          console.log(`⚠️ [${timestamp}] Service Worker: Error forwarding to popup (expected if popup closed):`, error);
+        chrome.runtime.sendMessage(message, (response) => {
+          if (chrome.runtime.lastError) {
+            // This is expected when popup is closed, so we just log it quietly
+            console.log(`⚠️ [${timestamp}] Service Worker: Error forwarding to popup (expected if popup closed):`, chrome.runtime.lastError.message);
+          }
         });
         
         // Also forward to any open dashboard tabs
@@ -881,9 +872,22 @@ class BackgroundService {
       await new Promise(resolve => setTimeout(resolve, 500));
       console.log('✅ Wait completed, sending message to offscreen document');
       
-      // Send message directly to offscreen document
-      console.log('📤 Sending message to offscreen document:', message);
-      chrome.runtime.sendMessage(message, (response) => {
+      // Get the offscreen document context to send message to it
+      console.log('🔍 Finding offscreen document context...');
+      const existingContexts = await chrome.runtime.getContexts({});
+      const offscreenDocument = existingContexts.find(
+        (context) => context.contextType === 'OFFSCREEN_DOCUMENT'
+      );
+      
+      if (!offscreenDocument) {
+        console.error('❌ Offscreen document not found after creation');
+        sendResponse({ success: false, error: 'Offscreen document not available' });
+        return;
+      }
+      
+      console.log('📤 Sending message to offscreen document via runtime API:', message);
+      // Send message to the offscreen document using runtime API with documentId
+      chrome.runtime.sendMessage(message, { documentId: offscreenDocument.documentId }, (response) => {
         console.log('📥 Received response from offscreen document:', response);
         console.log('🔍 Chrome runtime last error:', chrome.runtime.lastError);
         
@@ -933,7 +937,7 @@ class BackgroundService {
     try {
       const initialData: UserData = {
         settings: {
-          cameraEnabled: true,
+          cameraEnabled: false,
           detectionSensitivity: 'medium',
           fatigueThreshold: 70,
           reminderEnabled: true,
@@ -1125,13 +1129,21 @@ chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIn
         // Start Break button
         console.log('▶️ Starting break session from notification');
         await backgroundService.initialize();
-        chrome.runtime.sendMessage({ action: 'START_BREAK', breakType: BreakType.SHORT });
+        chrome.runtime.sendMessage({ action: 'START_BREAK', breakType: BreakType.SHORT }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log('⚠️ Error sending START_BREAK message:', chrome.runtime.lastError.message);
+          }
+        });
         console.log('✅ Break session started');
       } else if (buttonIndex === 1) {
         // Snooze button
         console.log('😴 Snoozing reminder from notification');
         await backgroundService.initialize();
-        chrome.runtime.sendMessage({ action: 'SNOOZE_REMINDER', minutes: 5 });
+        chrome.runtime.sendMessage({ action: 'SNOOZE_REMINDER', minutes: 5 }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log('⚠️ Error sending SNOOZE_REMINDER message:', chrome.runtime.lastError.message);
+          }
+        });
         console.log('✅ Reminder snoozed for 5 minutes');
       } else {
         console.warn('❓ Unknown button index:', buttonIndex);

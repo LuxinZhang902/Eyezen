@@ -1,1 +1,539 @@
-(()=>{"use strict";var e,o={727:(e,o,t)=>{t.r(o),t.d(o,{default:()=>u});var r=t(123),n=t(235);class i{constructor(){this.session=null,this.isInitialized=!1}async initialize(){if(!("LanguageModel"in window))throw console.warn("Chrome AI Prompt API not available"),new Error('Chrome AI is not available. Please ensure you are using Chrome 127+ with the following flags enabled:\n\n1. chrome://flags/#optimization-guide-on-device-model → "Enabled BypassPerfRequirement"\n2. chrome://flags/#prompt-api-for-gemini-nano → "Enabled"\n\nThen restart Chrome completely.');const e=await window.LanguageModel.availability();if(console.log("Chrome AI model availability:",e),"no"===e)throw console.warn("Chrome AI model not available on this device"),new Error("Chrome AI is not available on this device. This may be due to:\n\n• Hardware requirements not met (need 22GB+ free space, 4GB+ VRAM)\n• Operating system not supported (requires macOS 13+ or Windows 10+)\n• Chrome flags not properly enabled\n\nPlease check the requirements and try again.");if("after-download"===e)console.log("Chrome AI model needs to be downloaded. Starting download..."),this.session=await window.languageModel.create({topK:3,temperature:.3,monitor(e){e.addEventListener("downloadprogress",e=>{const o=Math.round(100*e.loaded);console.log(`Chrome AI model download progress: ${o}%`)})}});else{if("available"!==e)throw console.warn("Unknown Chrome AI availability status:",e),new Error(`Chrome AI availability status is unknown: ${e}`);this.session=await window.LanguageModel.create({topK:3,temperature:.3})}this.isInitialized=!0,console.log("Chrome AI service initialized successfully")}async generateHealthSuggestion(e,o,t){this.isInitialized||await this.initialize();try{const r=this.buildHealthPrompt(e,o,t);console.log("Sending prompt to Chrome AI:",r);const n=await this.session.prompt(r);return console.log("Chrome AI response:",n),this.parseAIResponse(n,e,o,t)}catch(e){console.error("Chrome AI suggestion generation failed:",e);const o=e instanceof Error?e.message:"Unknown error occurred";throw new Error(`Chrome AI failed to generate suggestion: ${o}`)}}buildHealthPrompt(e,o,t){return`As an eye health expert, provide a brief personalized tip (max 40 words) based on these metrics:\n\nEye Health Score: ${e}/100\nFatigue Level: ${o}/100\nBlink Rate: ${t.blinkRate} blinks/min (normal: 15-20)\nEye Strain Index: ${(100*t.fatigueIndex).toFixed(1)}%\nPosture Status: ${t.posture}\n\nProvide a unique suggestion that is NOT a break activity. Focus on:\n- Environment adjustments (lighting, screen distance, humidity)\n- Workspace ergonomics (monitor height, chair position)\n- Daily habits (hydration, nutrition, sleep)\n- Posture improvements\n\nProvide:\n1. One specific actionable tip\n2. Urgency level (low/medium/high)\n3. Category (environment/posture/habits/nutrition/workspace)\n\nFormat: "[Tip] | [Urgency] | [Category]"`}parseAIResponse(e,o,t,r){try{const o=e.split("|").map(e=>e.trim());if(o.length>=3){const e=o[0];return{message:e,severity:this.normalizeSeverity(o[1]),category:this.normalizeCategory(o[2]),confidence:.85}}}catch(e){console.warn("Failed to parse AI response:",e)}return{message:e.substring(0,100),severity:this.determineSeverity(o,t),category:this.determineCategory(t,r),confidence:.7}}normalizeSeverity(e){const o=e.toLowerCase();return o.includes("high")||o.includes("urgent")||o.includes("critical")?"high":o.includes("medium")||o.includes("moderate")?"medium":"low"}normalizeCategory(e){const o=e.toLowerCase();return o.includes("environment")||o.includes("lighting")||o.includes("humidity")?"environment":o.includes("posture")||o.includes("position")?"posture":o.includes("habits")||o.includes("sleep")||o.includes("routine")?"habits":o.includes("nutrition")||o.includes("hydration")||o.includes("food")?"nutrition":o.includes("workspace")||o.includes("ergonomic")||o.includes("monitor")?"workspace":"environment"}determineSeverity(e,o){return o>70||e<30?"high":o>40||e<60?"medium":"low"}determineCategory(e,o){return o.posture===n.PostureStatus.FORWARD||o.posture===n.PostureStatus.TILTED?"posture":e>60?"habits":o.blinkRate<10?"environment":o.fatigueIndex>.5?"workspace":"environment"}getFallbackSuggestion(e,o,t){const r=this.determineSeverity(e,o),n=this.determineCategory(o,t);return{message:{environment:"Adjust your screen brightness to match room lighting and increase humidity.",posture:"Position your monitor 20-26 inches away and top of screen at eye level.",habits:"Stay hydrated with 8 glasses of water daily and get 7-8 hours of sleep.",nutrition:"Include omega-3 rich foods and leafy greens in your diet for eye health.",workspace:"Use proper lighting behind your screen and consider blue light filters."}[n],severity:r,category:n,confidence:.6}}async destroy(){if(this.session){try{await this.session.destroy()}catch(e){console.warn("Error destroying Chrome AI session:",e)}this.session=null}this.isInitialized=!1}}new i,console.log("📄 EyeZen Service Worker: Script loaded at",(new Date).toLocaleString());const s="break-reminder",a="daily-summary",c="posture-check",l=.5,d=30,m=1440;console.log("🚀 EyeZen Service Worker: Starting initialization...");const g=new class{constructor(){this.isInitialized=!1,this.activeBreakTabId=null}async initialize(){if(this.isInitialized)console.log("⚠️ Service already initialized, skipping...");else try{console.log("🚀 Initializing EyeZen Service at:",(new Date).toLocaleString()),console.log("🔍 Service worker context:",{isServiceWorker:"undefined"!=typeof self&&"importScripts"in self,hasChrome:"undefined"!=typeof chrome,hasAlarms:void 0!==chrome?.alarms,hasNotifications:void 0!==chrome?.notifications}),console.log("🤖 Initializing Chrome AI service..."),this.chromeAI=new i,console.log("✅ Chrome AI service initialized"),console.log("🔧 Setting up alarm listener..."),chrome.alarms.onAlarm.addListener(e=>{console.log("🚨 ALARM FIRED:",{name:e.name,scheduledTime:new Date(e.scheduledTime).toLocaleString(),actualTime:(new Date).toLocaleString(),delay:Date.now()-e.scheduledTime,periodInMinutes:e.periodInMinutes}),chrome.alarms.getAll().then(e=>{console.log("📋 All alarms when fired:",e.map(e=>({name:e.name,scheduledTime:new Date(e.scheduledTime).toLocaleString(),periodInMinutes:e.periodInMinutes})))}),this.handleAlarm(e)}),console.log("✅ Alarm listener registered"),console.log("📬 Setting up message listener..."),chrome.runtime.onMessage.addListener(this.handleMessage.bind(this)),console.log("✅ Message listener registered successfully"),chrome.runtime.onInstalled.addListener(this.handleInstall.bind(this)),chrome.runtime.onStartup.addListener(this.handleStartup.bind(this)),chrome.tabs.onRemoved.addListener(this.handleTabRemoved.bind(this)),await this.setupDefaultAlarms(),this.isInitialized=!0,console.log("EyeZen Background Service initialized")}catch(e){console.error("Failed to initialize background service:",e)}}async handleAlarm(e){console.log("🚨 Alarm triggered:",{name:e.name,scheduledTime:new Date(e.scheduledTime).toLocaleString(),currentTime:(new Date).toLocaleString(),periodInMinutes:e.periodInMinutes});try{switch(e.name){case s:console.log("👁️ Processing break reminder alarm"),await this.handleBreakReminder();break;case c:console.log("🏃 Processing posture check alarm"),await this.handlePostureCheck();break;case a:console.log("📊 Processing daily summary alarm"),await this.handleDailySummary();break;case"weekly-summary":console.log("📈 Processing weekly summary alarm"),await this.handleWeeklySummary();break;case"eyezen_break_reminder":console.log("⏰ Processing EyeZen break reminder alarm"),await this.handleEyeZenBreakReminder();break;default:console.log("❓ Unknown alarm triggered:",e.name)}console.log("✅ Alarm handling completed for:",e.name)}catch(o){console.error("❌ Error handling alarm:",e.name,o),console.error("❌ Alarm error details:",o instanceof Error?o.stack:"No stack trace")}}async handleMessage(e,o,t){const n=`${e.type}-${Date.now()}`;console.log(`🔄 Service Worker: Processing message ${n}, staying active...`),"REQUEST_CAMERA"!==e.type&&"STOP_CAMERA"!==e.type&&"GET_CAMERA_STATE"!==e.type&&console.log(`📨 Service Worker received message ${n}:`,{type:e.type||e.action,timestamp:(new Date).toLocaleString(),sender:o.tab?`Tab ${o.tab.id}`:"Extension",data:e.data?"Present":"None",attempt:e.attempt||"N/A",isInitialized:this.isInitialized,fullMessage:e});try{if("REQUEST_CAMERA"===e.type||"STOP_CAMERA"===e.type||"GET_CAMERA_STATE"===e.type)return this.forwardToOffscreenDocument(e,t),!0;if("POPUP_TEST"===e.type)return console.log("🧪 Service Worker: Received test message from popup:",e.data),t({success:!0,message:"Test message received by service worker"}),!1;if("WAKE_UP"===e.type)return console.log("⏰ Service Worker: Received WAKE_UP message, staying active"),t({success:!0,message:"Service worker is awake"}),!1;if("HEALTH_CHECK"===e.type)return console.log("🏥 [SW] HEALTH_CHECK message received"),t({success:!0,initialized:this.isInitialized,timestamp:Date.now(),message:"Service worker is healthy"}),!1;if("PING"===e.type){if(console.log("🏓 Service Worker: Received PING, checking readiness..."),!this.isInitialized){console.log("⚠️ Service Worker: Not initialized, initializing now...");try{await this.initialize(),console.log("✅ Service Worker: Initialization completed for PING")}catch(e){return console.error("❌ Service Worker: Initialization failed for PING:",e),t({success:!1,error:"Initialization failed",initialized:!1}),!1}}return this.isInitialized?(console.log("🏓 Service Worker: Responding with PONG - fully ready"),t({success:!0,message:"PONG",initialized:!0})):(console.warn("⚠️ Service Worker: Still not initialized after attempt"),t({success:!1,error:"Not ready",initialized:!1})),!1}if("EYE_METRICS"===e.type){const o=(new Date).toISOString();console.log(`👁️ [${o}] Service Worker: Received EYE_METRICS from offscreen:`,e.data),console.log(`📤 [${o}] Service Worker: Forwarding eye metrics to popup and dashboard`);try{await chrome.storage.local.set({latest_eye_metrics:{data:e.data,timestamp:Date.now()}}),console.log(`💾 [${o}] Service Worker: Stored eye metrics in storage`)}catch(e){console.log(`❌ [${o}] Service Worker: Error storing metrics:`,e)}return chrome.runtime.sendMessage(e,e=>{chrome.runtime.lastError&&console.log(`⚠️ [${o}] Service Worker: Error forwarding to popup (expected if popup closed):`,chrome.runtime.lastError.message)}),this.forwardToDashboardTabs(e),t({success:!0}),!1}if("SETTINGS_UPDATED"===e.type){console.log("⚙️ Service Worker: Processing SETTINGS_UPDATED message:",e.data?.settings),this.isInitialized||(console.log("⚠️ Service Worker: Not initialized, initializing now..."),await this.initialize());try{e.data?.settings?(await this.updateSettings(e.data.settings),console.log("✅ Service Worker: Settings updated successfully from SETTINGS_UPDATED message"),t({success:!0})):(console.warn("⚠️ Service Worker: SETTINGS_UPDATED message missing settings data"),t({success:!1,error:"Missing settings data"}))}catch(e){console.error("❌ Service Worker: Error processing SETTINGS_UPDATED:",e),t({success:!1,error:String(e)})}return!1}switch(e.action){case"START_BREAK":console.log("🛑 Service Worker: Processing START_BREAK request:",e.breakType),await this.startBreak(e.breakType),console.log("✅ Service Worker: Break started successfully"),t({success:!0});break;case"END_BREAK":console.log("✅ Service Worker: Processing END_BREAK request:",e.breakId),await this.endBreak(e.breakId),console.log("✅ Service Worker: Break ended successfully"),t({success:!0});break;case"UPDATE_SETTINGS":console.log("⚙️ Service Worker: Processing UPDATE_SETTINGS request:",e.settings),await this.updateSettings(e.settings),console.log("✅ Service Worker: Settings updated successfully, alarms may have been recreated"),t({success:!0});break;case"GET_STATUS":console.log("📊 Service Worker: Processing GET_STATUS request");const o=await this.getStatus();console.log("✅ Service Worker: Status retrieved successfully"),t({success:!0,data:o});break;case"SNOOZE_REMINDER":console.log("😴 Service Worker: Processing SNOOZE_REMINDER request for",e.minutes||5,"minutes"),await this.snoozeReminder(e.minutes||5),console.log("✅ Service Worker: Reminder snoozed successfully"),t({success:!0});break;case"SETUP_ALARMS":console.log("🔧 Service Worker: Processing SETUP_ALARMS request (debug)"),await this.setupDefaultAlarms(),console.log("✅ Service Worker: Alarms setup completed"),t({success:!0});break;case"TEST_NOTIFICATION":console.log("🔔 Service Worker: Processing TEST_NOTIFICATION request"),await this.showNotification({type:"basic",iconUrl:"assets/icons/icon-48.png",title:"🧪 Test Notification",message:"This is a test notification from EyeZen debug system.",priority:1,buttons:[{title:"Test Button 1"},{title:"Test Button 2"}]}),console.log("✅ Service Worker: Test notification sent successfully"),t({success:!0});break;case"GET_USER_DATA":console.log("💾 Service Worker: Processing GET_USER_DATA request (debug)");const n=await r.ChromeStorageService.getUserData();console.log("✅ Service Worker: User data retrieved successfully"),t({success:!0,data:n});break;case"INITIALIZE_USER_DATA":console.log("🔧 Service Worker: Processing INITIALIZE_USER_DATA request (debug)"),await this.setupInitialData(),console.log("✅ Service Worker: User data initialized successfully"),t({success:!0});break;default:console.warn("❓ Service Worker: Unknown action received:",e.action||e.type),t({success:!1,error:"Unknown action"})}}catch(o){console.error("❌ Service Worker: Error handling message:",{messageType:e.action||e.type,error:o instanceof Error?o.message:String(o),stack:o instanceof Error?o.stack:"No stack trace",timestamp:(new Date).toLocaleString()}),t({success:!1,error:String(o)})}return!1}async handleInstall(e){console.log("📦 Extension installed/updated:",{reason:e.reason,timestamp:(new Date).toLocaleString(),previousVersion:e.previousVersion}),"install"===e.reason?(console.log("🎉 EyeZen installed for the first time"),console.log("🔧 Setting up initial data..."),await this.setupInitialData(),console.log("✅ Initial data setup completed"),console.log("🔔 Showing welcome notification..."),await this.showNotification({type:"basic",iconUrl:"assets/icons/icon-48.png",title:"Welcome to EyeZen! 👁️",message:"Your AI eye health companion is ready. Click to get started!"}),console.log("✅ Welcome notification sent")):"update"===e.reason&&console.log("🔄 EyeZen updated to version:",chrome.runtime.getManifest().version)}async handleStartup(){console.log("🚀 EyeZen service worker started at:",(new Date).toLocaleString()),console.log("🔧 Setting up alarms on startup..."),await this.setupDefaultAlarms(),console.log("✅ Startup alarm setup completed")}async handleTabRemoved(e){this.activeBreakTabId===e&&(this.activeBreakTabId=null,console.log("Break tab closed"))}async setupDefaultAlarms(){try{console.log("⏰ Setting up default alarms at:",(new Date).toLocaleString());const e=await r.ChromeStorageService.getUserData();console.log("📊 User data retrieved for alarm setup:",e?"Found":"Not found");const o=e?.settings||n.DEFAULT_SETTINGS;console.log("⚙️ Alarm settings:",{reminderEnabled:o.reminderEnabled,reminderInterval:o.reminderInterval,notifications:o.notifications,defaultInterval:l});const t=await chrome.alarms.clearAll();if(console.log("🧹 Cleared existing alarms, count:",t),o.reminderEnabled??1){let e=o.reminderInterval||l;e<.5&&(console.warn("⚠️ Alarm interval too small, adjusting to minimum 0.5 minutes"),e=.5),console.log("⏰ Setting up break reminder alarm:",{userInterval:o.reminderInterval,defaultInterval:l,finalInterval:e,minAllowed:.5,nextTrigger:new Date(Date.now()+6e4*e).toLocaleString()});try{await chrome.alarms.create(s,{delayInMinutes:e,periodInMinutes:e}),console.log(`✅ Created break reminder alarm with ${e} minute interval (user setting: ${o.reminderInterval}, testing default: ${l})`);const t=await chrome.alarms.get(s);t?console.log("✅ Break reminder alarm confirmed:",{name:t.name,scheduledTime:new Date(t.scheduledTime).toLocaleString(),periodInMinutes:t.periodInMinutes}):console.error("❌ Break reminder alarm not found after creation")}catch(e){console.error("❌ Failed to create break reminder alarm:",e)}}else console.log("❌ Break reminder disabled in settings");(o.reminderEnabled??1)&&(await chrome.alarms.create(c,{delayInMinutes:d,periodInMinutes:d}),console.log(`🏃 Created posture check alarm with ${d} minute interval`));const i=new Date,g=new Date;g.setHours(20,0,0,0),g<=i&&g.setDate(g.getDate()+1),await chrome.alarms.create(a,{when:g.getTime(),periodInMinutes:m}),console.log(`📊 Created daily summary alarm for ${g.toLocaleString()}`);const u=await chrome.alarms.getAll();console.log("📋 All active alarms after setup:",u.map(e=>({name:e.name,scheduledTime:new Date(e.scheduledTime).toLocaleString(),periodInMinutes:e.periodInMinutes}))),console.log("🎯 Default alarms set up successfully")}catch(e){console.error("❌ Failed to setup default alarms:",e),console.error("❌ Alarm setup error details:",e instanceof Error?e.stack:"No stack trace")}}async handleBreakReminder(){try{console.log("👁️ Break reminder triggered at:",(new Date).toLocaleString()),console.log("🔍 Handling break reminder - fetching user data...");const e=await r.ChromeStorageService.getUserData();if(console.log("📋 User data retrieved:",{hasUserData:!!e,reminderEnabled:e?.settings?.reminderEnabled,breaksCount:e?.breaks?.length||0,metricsCount:e?.metrics?.length||0}),!e||!e.settings.reminderEnabled)return void console.log("❌ Break reminder skipped - no user data or reminders disabled");const o=e.breaks.find(e=>!e.completed);if(o)return void console.log("⏸️ User is already in a break, skipping reminder:",o.id);console.log("✅ Proceeding with break reminder notification...");const t=e.metrics.slice(-5),i=t.reduce((e,o)=>e+(o.fatigueIndex||0),0)/t.length;let s="👁️ Time for an Eye Break!",a="Follow the 20-20-20 rule: Look at something 20 feet away for 20 seconds.",c=0;if(i>.7)s="⚠️ High Eye Strain Detected!",a="Your eyes need immediate rest. Take a break now to prevent fatigue.",c=2;else if(i>.5)s="😴 Eyes Getting Tired",a="Time for a refreshing eye break. Your future self will thank you!",c=1;else try{const e=await this.chromeAI.generateHealthSuggestion(100*i,100*i,{blinkRate:15,fatigueIndex:i,posture:n.PostureStatus.GOOD,earValue:.25,perclosValue:.2,timestamp:Date.now()});s=`🤖 AI Rest Suggestion (${e.category})`,a=e.message,c=1}catch(e){console.error("Failed to generate AI suggestion:",e),s="⏰ Break Time Reminder",a="Time for your scheduled eye break! Follow the 20-20-20 rule: Look at something 20 feet away for 20 seconds.",c=1}console.log("🔔 Preparing notification:",{title:s,message:a,priority:c,timestamp:(new Date).toLocaleString()}),await this.showNotification({type:"basic",iconUrl:"assets/icons/icon-48.png",title:s,message:a,priority:c,contextMessage:`Next reminder in ${e.settings.reminderInterval} minutes`,requireInteraction:c>=1,buttons:[{title:"🧘 Start Break",iconUrl:"assets/icons/icon-16.png"},{title:"⏰ Snooze 5min",iconUrl:"assets/icons/icon-16.png"}]}),console.log("✅ Break reminder notification sent successfully at:",(new Date).toLocaleString())}catch(e){console.error("❌ Error in break reminder:",e),console.error("❌ Error stack:",e instanceof Error?e.stack:"No stack trace")}}async handlePostureCheck(){try{const e=await r.ChromeStorageService.getUserData();if(!e||!e.settings.reminderEnabled)return;await this.showNotification({type:"basic",iconUrl:"assets/icons/icon-48.png",title:"🧘 Posture Check",message:"Sit up straight, relax your shoulders, and adjust your screen height.",priority:0})}catch(e){console.error("Error in posture check:",e)}}async handleDailySummary(){try{const e=await r.ChromeStorageService.getUserData();if(!e)return;const o=new Date;o.setHours(0,0,0,0);const t=e.metrics.filter(e=>{const t=new Date(e.timestamp);return t.setHours(0,0,0,0),t.getTime()===o.getTime()}),n=e.breaks.filter(e=>{const t=new Date(e.startTime);return t.setHours(0,0,0,0),t.getTime()===o.getTime()&&e.completed}),i=t.length>0?t.reduce((e,o)=>e+(100-100*(o.fatigueIndex||0)),0)/t.length:50;await this.showNotification({type:"basic",iconUrl:"assets/icons/icon-48.png",title:"📊 Daily Eye Health Summary",message:`Eye Health Score: ${Math.round(i)}/100 | Breaks Taken: ${n.length}`,priority:0})}catch(e){console.error("Error in daily summary:",e)}}async handleWeeklySummary(){try{await this.showNotification({type:"basic",iconUrl:"assets/icons/icon-48.png",title:"📈 Weekly Eye Health Report",message:"Your weekly eye health report is ready! Click to view insights.",priority:1})}catch(e){console.error("Error in weekly summary:",e)}}async handleEyeZenBreakReminder(){try{console.log("⏰ EyeZen break reminder triggered");const e=await chrome.storage.local.get(["eyezen_reminder"]);if(!e.eyezen_reminder||!e.eyezen_reminder.isActive)return void console.log("⏰ Reminder is no longer active, skipping notification");await this.showNotification({type:"basic",iconUrl:"assets/icons/icon-48.png",title:"👁️ Time for an Eye Break!",message:`It's been ${e.eyezen_reminder.interval} minutes. Take a moment to rest your eyes.`,buttons:[{title:"Take Break Now"},{title:"Snooze 5 min"}],priority:2}),console.log("✅ Break reminder notification shown")}catch(e){console.error("❌ Error in EyeZen break reminder:",e)}}async startBreak(e){try{const o=Date.now().toString(),t={id:o,type:e,duration:e===n.BreakType.MICRO?20:e===n.BreakType.SHORT?300:900,startTime:Date.now(),completed:!1,activities:[]},i=await r.ChromeStorageService.getUserData();i&&(i.breaks.push(t),await r.ChromeStorageService.saveUserData(i));const s=chrome.runtime.getURL(`break-ritual.html?type=${e}&id=${o}`),a=await chrome.tabs.create({url:s});this.activeBreakTabId=a.id||null,console.log("Break started:",e,o)}catch(e){throw console.error("Error starting break:",e),e}}async endBreak(e){try{const o=await r.ChromeStorageService.getUserData();if(o){const t=o.breaks.findIndex(o=>o.id===e);-1!==t&&(o.breaks[t].completed=!0,o.breaks[t].endTime=Date.now(),await r.ChromeStorageService.saveUserData(o))}console.log("Break completed:",e)}catch(e){throw console.error("Error ending break:",e),e}}async updateSettings(e){try{await r.ChromeStorageService.updateSettings(e),await this.setupDefaultAlarms(),console.log("Settings updated:",e)}catch(e){throw console.error("Error updating settings:",e),e}}async getStatus(){try{const e=await r.ChromeStorageService.getUserData();return{isActive:!0,settings:e?.settings||{},lastBreak:e?.breaks.slice(-1)[0]||null,todayMetrics:e?.metrics.filter(e=>{const o=new Date;o.setHours(0,0,0,0);const t=new Date(e.timestamp);return t.setHours(0,0,0,0),t.getTime()===o.getTime()})||[]}}catch(e){throw console.error("Error getting status:",e),e}}async snoozeReminder(e){try{console.log(`😴 Snoozing reminder for ${e} minutes at:`,(new Date).toLocaleString());const o=await chrome.alarms.clear(s);console.log("🧹 Existing alarm cleared:",o),await chrome.alarms.create(s,{delayInMinutes:e}),console.log(`✅ Reminder snoozed for ${e} minutes, will trigger at:`,new Date(Date.now()+6e4*e).toLocaleString());const t=await chrome.alarms.get(s);t?console.log("✅ Snooze alarm confirmed:",{name:t.name,scheduledTime:new Date(t.scheduledTime).toLocaleString()}):console.warn("⚠️ Snooze alarm not found after creation")}catch(e){throw console.error("❌ Error snoozing reminder:",e),console.error("❌ Snooze error details:",e instanceof Error?e.stack:"No stack trace"),e}}async ensureOffscreenDocument(){console.log("🔍 Checking for existing offscreen document...");const e=await chrome.runtime.getContexts({});console.log("📋 All existing contexts:",e);const o=e.find(e=>"OFFSCREEN_DOCUMENT"===e.contextType);o?console.log("✅ Offscreen document already exists:",o):(console.log("📄 No offscreen document found, creating new one..."),await chrome.offscreen.createDocument({url:"offscreen.html",reasons:[chrome.offscreen.Reason.USER_MEDIA],justification:"Camera access for eye health monitoring"}),console.log("✅ Offscreen document created successfully"))}async forwardToOffscreenDocument(e,o){console.log("🚀 forwardToOffscreenDocument called with message:",e);try{console.log("📄 Ensuring offscreen document exists..."),await this.ensureOffscreenDocument(),console.log("✅ Offscreen document ensured"),console.log("⏳ Waiting 500ms for offscreen document to be ready..."),await new Promise(e=>setTimeout(e,500)),console.log("✅ Wait completed, sending message to offscreen document"),console.log("🔍 Finding offscreen document context...");const t=(await chrome.runtime.getContexts({})).find(e=>"OFFSCREEN_DOCUMENT"===e.contextType);if(!t)return console.error("❌ Offscreen document not found after creation"),void o({success:!1,error:"Offscreen document not available"});console.log("📤 Sending message to offscreen document via runtime API:",e),chrome.runtime.sendMessage(e,{documentId:t.documentId},e=>{console.log("📥 Received response from offscreen document:",e),console.log("🔍 Chrome runtime last error:",chrome.runtime.lastError),chrome.runtime.lastError?(console.error("❌ Error communicating with offscreen document:",chrome.runtime.lastError),o({success:!1,error:chrome.runtime.lastError.message})):(console.log("✅ Forwarding response back to popup:",e),o(e))})}catch(e){console.error("❌ Error in forwardToOffscreenDocument:",e),o({success:!1,error:e instanceof Error?e.message:String(e)})}}async forwardToDashboardTabs(e){try{const o=await chrome.tabs.query({url:"*://*/eye-posture-dashboard.html"}),t=await chrome.tabs.query({url:"file://*/eye-posture-dashboard.html"}),r=[...o,...t];for(const o of r)o.id&&chrome.tabs.sendMessage(o.id,e).catch(()=>{});r.length>0&&console.log(`📊 Forwarded metrics to ${r.length} dashboard tab(s)`)}catch(e){console.error("❌ Failed to forward message to dashboard tabs:",e)}}async setupInitialData(){try{const e={settings:{cameraEnabled:!1,detectionSensitivity:"medium",fatigueThreshold:70,reminderEnabled:!0,reminderInterval:20,breakDuration:20,dataRetention:30,metricsOnly:!1,language:"en",theme:"light",notifications:!0,sounds:!0,dailyBreakGoal:8,eyeScoreGoal:80},metrics:[],breaks:[],events:[],score:{current:50,daily:50,weekly:50,trend:"stable"},lastUpdated:Date.now()};await r.ChromeStorageService.saveUserData(e),console.log("Initial data setup completed")}catch(e){console.error("Error setting up initial data:",e)}}async showNotification(e){try{if(console.log("🔔 showNotification called with options:",{type:e.type,iconUrl:e.iconUrl,title:e.title,message:e.message,priority:e.priority,buttonsCount:e.buttons?.length||0,timestamp:(new Date).toLocaleString()}),!chrome.notifications)throw console.error("❌ chrome.notifications API not available"),new Error("Notifications API not available");try{const e=await chrome.permissions.contains({permissions:["notifications"]});if(console.log("🔐 Notification permission granted:",e),!e)throw console.error("❌ Notification permission not granted"),new Error("Notification permission not granted")}catch(e){console.warn("⚠️ Could not check notification permissions:",e)}const o=`eyezen-${Date.now()}`;console.log("📢 Creating notification with ID:",o);const t={type:"basic",iconUrl:"assets/icons/icon-48.png",title:"EyeZen",message:"",priority:0,...e},r={type:"basic",iconUrl:t.iconUrl||"assets/icons/icon-48.png",title:t.title||"EyeZen",message:t.message||""};t.buttons&&(r.buttons=t.buttons),void 0!==t.priority&&(r.priority=t.priority),t.requireInteraction&&(r.requireInteraction=t.requireInteraction),t.contextMessage&&(r.contextMessage=t.contextMessage),console.log("🔧 Final notification options:",r),await chrome.notifications.create(o,r),console.log("✅ Notification created successfully:",o);const n=setTimeout(()=>{console.log("✅ Notification creation timeout completed for:",o)},1e3),i=()=>{clearTimeout(n)};return chrome.notifications.onClicked.addListener(i),chrome.notifications.onClosed.addListener(i),0!==(e.priority||0)||t.requireInteraction||(console.log("⏰ Setting auto-clear timer for low priority notification"),setTimeout(()=>{chrome.notifications.clear(o),console.log("🧹 Auto-cleared notification:",o)},8e3)),o}catch(e){throw console.error("❌ Error showing notification:",e),console.error("❌ Error details:",{name:e instanceof Error?e.name:"Unknown",message:e instanceof Error?e.message:String(e),stack:e instanceof Error?e.stack:"No stack trace"}),e}}};g.initialize().then(()=>{console.log("✅ EyeZen Service Worker: Initialization completed")}).catch(e=>{console.error("❌ EyeZen Service Worker: Initialization failed:",e)}),chrome.notifications.onClicked.addListener(e=>{if(console.log("🔔 Notification clicked:",{notificationId:e,timestamp:(new Date).toLocaleString()}),e.startsWith("eyezen-"))try{chrome.action.openPopup(),console.log("✅ Popup opened from notification click"),chrome.notifications.clear(e),console.log("✅ Notification cleared after click")}catch(e){console.error("❌ Error handling notification click:",e)}}),chrome.notifications.onButtonClicked.addListener(async(e,o)=>{if(console.log("🔘 Notification button clicked:",{notificationId:e,buttonIndex:o,timestamp:(new Date).toLocaleString()}),e.startsWith("eyezen-"))try{0===o?(console.log("▶️ Starting break session from notification"),await g.initialize(),chrome.runtime.sendMessage({action:"START_BREAK",breakType:n.BreakType.SHORT},e=>{chrome.runtime.lastError&&console.log("⚠️ Error sending START_BREAK message:",chrome.runtime.lastError.message)}),console.log("✅ Break session started")):1===o?(console.log("😴 Snoozing reminder from notification"),await g.initialize(),chrome.runtime.sendMessage({action:"SNOOZE_REMINDER",minutes:5},e=>{chrome.runtime.lastError&&console.log("⚠️ Error sending SNOOZE_REMINDER message:",chrome.runtime.lastError.message)}),console.log("✅ Reminder snoozed for 5 minutes")):console.warn("❓ Unknown button index:",o),chrome.notifications.clear(e),console.log("✅ Notification cleared after button click")}catch(e){console.error("❌ Error handling notification button click:",e),console.error("❌ Button click error details:",e instanceof Error?e.stack:"No stack trace")}});const u=g}},t={};function r(e){var n=t[e];if(void 0!==n)return n.exports;var i=t[e]={exports:{}};return o[e](i,i.exports,r),i.exports}r.m=o,e=[],r.O=(o,t,n,i)=>{if(!t){var s=1/0;for(d=0;d<e.length;d++){for(var[t,n,i]=e[d],a=!0,c=0;c<t.length;c++)(!1&i||s>=i)&&Object.keys(r.O).every(e=>r.O[e](t[c]))?t.splice(c--,1):(a=!1,i<s&&(s=i));if(a){e.splice(d--,1);var l=n();void 0!==l&&(o=l)}}return o}i=i||0;for(var d=e.length;d>0&&e[d-1][2]>i;d--)e[d]=e[d-1];e[d]=[t,n,i]},r.d=(e,o)=>{for(var t in o)r.o(o,t)&&!r.o(e,t)&&Object.defineProperty(e,t,{enumerable:!0,get:o[t]})},r.o=(e,o)=>Object.prototype.hasOwnProperty.call(e,o),r.r=e=>{"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(e,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(e,"__esModule",{value:!0})},(()=>{var e={471:0};r.O.j=o=>0===e[o];var o=(o,t)=>{var n,i,[s,a,c]=t,l=0;if(s.some(o=>0!==e[o])){for(n in a)r.o(a,n)&&(r.m[n]=a[n]);if(c)var d=c(r)}for(o&&o(t);l<s.length;l++)i=s[l],r.o(e,i)&&e[i]&&e[i][0](),e[i]=0;return r.O(d)},t=self.webpackChunkeyezen_chrome_extension=self.webpackChunkeyezen_chrome_extension||[];t.forEach(o.bind(null,0)),t.push=o.bind(null,t.push.bind(t))})();var n=r.O(void 0,[123],()=>r(727));n=r.O(n)})();
+// EyeZen Service Worker - Background Script
+console.log("📄 EyeZen Service Worker: Script loaded at", new Date().toLocaleString());
+
+// Chrome AI Service Class
+class ChromeAIService {
+    constructor() {
+        this.session = null;
+        this.isInitialized = false;
+    }
+
+    async initialize() {
+        if (!('LanguageModel' in window)) {
+            console.warn("Chrome AI Prompt API not available");
+            throw new Error('Chrome AI is not available. Please ensure you are using Chrome 127+ with the following flags enabled:\n\n1. chrome://flags/#optimization-guide-on-device-model → "Enabled BypassPerfRequirement"\n2. chrome://flags/#prompt-api-for-gemini-nano → "Enabled"\n\nThen restart Chrome completely.');
+        }
+
+        const availability = await window.LanguageModel.availability();
+        console.log("Chrome AI model availability:", availability);
+
+        if (availability === "no") {
+            console.warn("Chrome AI model not available on this device");
+            throw new Error("Chrome AI is not available on this device. This may be due to:\n\n• Hardware requirements not met (need 22GB+ free space, 4GB+ VRAM)\n• Operating system not supported (requires macOS 13+ or Windows 10+)\n• Chrome flags not properly enabled\n\nPlease check the requirements and try again.");
+        }
+
+        if (availability === "after-download") {
+            console.log("Chrome AI model needs to be downloaded. Starting download...");
+            this.session = await window.languageModel.create({
+                topK: 3,
+                temperature: 0.3,
+                monitor(m) {
+                    m.addEventListener("downloadprogress", (e) => {
+                        const progress = Math.round(e.loaded * 100);
+                        console.log(`Chrome AI model download progress: ${progress}%`);
+                    });
+                }
+            });
+        } else if (availability === "available") {
+            this.session = await window.LanguageModel.create({
+                topK: 3,
+                temperature: 0.3
+            });
+        } else {
+            console.warn("Unknown Chrome AI availability status:", availability);
+            throw new Error(`Chrome AI availability status is unknown: ${availability}`);
+        }
+
+        this.isInitialized = true;
+        console.log("Chrome AI service initialized successfully");
+    }
+
+    async destroy() {
+        if (this.session) {
+            try {
+                await this.session.destroy();
+            } catch (error) {
+                console.warn("Error destroying Chrome AI session:", error);
+            }
+            this.session = null;
+        }
+        this.isInitialized = false;
+    }
+}
+
+// Background Service Class
+class BackgroundService {
+    constructor() {
+        console.log("🔧 TESTING: BackgroundService constructor called!");
+        this.isInitialized = false;
+        this.activeBreakTabId = null;
+        this.chromeAI = null;
+    }
+
+    async initialize() {
+        if (this.isInitialized) {
+            console.log("⚠️ Service already initialized, skipping...");
+            return;
+        }
+
+        try {
+            console.log("🚀 Initializing EyeZen Service at:", new Date().toLocaleString());
+            console.log("🔍 Service worker context:", {
+                isServiceWorker: typeof self !== 'undefined' && 'importScripts' in self,
+                hasChrome: typeof chrome !== 'undefined',
+                hasAlarms: chrome?.alarms !== undefined,
+                hasNotifications: chrome?.notifications !== undefined
+            });
+
+            // Initialize Chrome AI
+            console.log("🤖 Initializing Chrome AI service...");
+            this.chromeAI = new ChromeAIService();
+            console.log("✅ Chrome AI service initialized");
+
+            // Setup alarm listener
+            console.log("🔧 Setting up alarm listener...");
+            chrome.alarms.onAlarm.addListener((alarm) => {
+                console.log("🚨 ALARM FIRED:", {
+                    name: alarm.name,
+                    scheduledTime: new Date(alarm.scheduledTime).toLocaleString(),
+                    actualTime: new Date().toLocaleString(),
+                    delay: Date.now() - alarm.scheduledTime,
+                    periodInMinutes: alarm.periodInMinutes
+                });
+                
+                chrome.alarms.getAll().then(alarms => {
+                    console.log("📋 All alarms when fired:", alarms.map(a => ({
+                        name: a.name,
+                        scheduledTime: new Date(a.scheduledTime).toLocaleString(),
+                        periodInMinutes: a.periodInMinutes
+                    })));
+                });
+                
+                this.handleAlarm(alarm);
+            });
+            console.log("✅ Alarm listener registered");
+
+            // Setup message listener
+            console.log("📬 Setting up message listener...");
+            chrome.runtime.onMessage.addListener(this.handleMessage.bind(this));
+            console.log("✅ Message listener registered successfully");
+
+            // Setup other event listeners
+            chrome.runtime.onInstalled.addListener(this.handleInstall.bind(this));
+            chrome.runtime.onStartup.addListener(this.handleStartup.bind(this));
+            chrome.tabs.onRemoved.addListener(this.handleTabRemoved.bind(this));
+
+            // Setup default alarms
+            await this.setupDefaultAlarms();
+
+            this.isInitialized = true;
+            console.log("✅ EyeZen Background Service initialized successfully");
+
+        } catch (error) {
+            console.error("❌ Failed to initialize background service:", error);
+            throw error;
+        }
+    }
+
+    async handleAlarm(alarm) {
+        console.log("🚨 Alarm triggered:", {
+            name: alarm.name,
+            scheduledTime: new Date(alarm.scheduledTime).toLocaleString(),
+            currentTime: new Date().toLocaleString(),
+            periodInMinutes: alarm.periodInMinutes
+        });
+
+        try {
+            switch (alarm.name) {
+                case "break-reminder":
+                    console.log("👁️ Processing break reminder alarm");
+                    await this.handleBreakReminder();
+                    break;
+                case "posture-check":
+                    console.log("🏃 Processing posture check alarm");
+                    await this.handlePostureCheck();
+                    break;
+                case "daily-summary":
+                    console.log("📊 Processing daily summary alarm");
+                    await this.handleDailySummary();
+                    break;
+                default:
+                    console.log("❓ Unknown alarm triggered:", alarm.name);
+            }
+            console.log("✅ Alarm handling completed for:", alarm.name);
+        } catch (error) {
+            console.error("❌ Error handling alarm:", alarm.name, error);
+        }
+    }
+
+    async handleMessage(message, sender, sendResponse) {
+        const messageId = `${message.type}-${Date.now()}`;
+        console.log(`📨 Service Worker received message ${messageId}:`, {
+            type: message.type || message.action,
+            timestamp: new Date().toLocaleString(),
+            sender: sender.tab ? `Tab ${sender.tab.id}` : "Extension",
+            isInitialized: this.isInitialized
+        });
+
+        try {
+            if (message.type === "HEALTH_CHECK") {
+                console.log("🏥 [SW] HEALTH_CHECK message received");
+                sendResponse({
+                    success: true,
+                    initialized: this.isInitialized,
+                    timestamp: Date.now(),
+                    message: "Service worker is healthy"
+                });
+                return false;
+            }
+
+            if (message.type === "PING") {
+                console.log("🏓 Service Worker: Received PING, checking readiness...");
+                if (!this.isInitialized) {
+                    try {
+                        console.log("🔄 Service Worker: Not initialized, initializing now...");
+                        await this.initialize();
+                        console.log("✅ Service Worker: Initialization completed during PING");
+                    } catch (error) {
+                        console.error("❌ Service Worker: Failed to initialize during PING:", error);
+                        sendResponse({
+                            success: false,
+                            error: "Failed to initialize service worker",
+                            details: error instanceof Error ? error.message : "Unknown error"
+                        });
+                        return false;
+                    }
+                }
+                
+                sendResponse({
+                    success: true,
+                    initialized: this.isInitialized,
+                    timestamp: Date.now(),
+                    message: "Service worker is ready"
+                });
+                return false;
+            }
+
+            console.log("❓ Unknown message type:", message.type || message.action);
+            sendResponse({ success: false, error: "Unknown message type" });
+            return false;
+
+        } catch (error) {
+            console.error("❌ Error handling message:", error);
+            sendResponse({
+                success: false,
+                error: "Message handling failed",
+                details: error instanceof Error ? error.message : "Unknown error"
+            });
+            return false;
+        }
+    }
+
+    async handleInstall(details) {
+        console.log("🔧 Extension installed/updated:", details);
+        await this.setupInitialData();
+    }
+
+    async handleStartup() {
+        console.log("🚀 Extension startup");
+        await this.setupDefaultAlarms();
+    }
+
+    async handleTabRemoved(tabId) {
+        if (this.activeBreakTabId === tabId) {
+            console.log("🗂️ Break tab closed:", tabId);
+            this.activeBreakTabId = null;
+        }
+    }
+
+    async setupDefaultAlarms() {
+        try {
+            console.log("⏰ Setting up default alarms...");
+            
+            const BREAK_INTERVAL = 0.5; // 30 seconds for testing
+            const POSTURE_INTERVAL = 30; // 30 minutes
+            const DAILY_INTERVAL = 1440; // 24 hours
+
+            // Clear existing alarms
+            await chrome.alarms.clear("break-reminder");
+            await chrome.alarms.create("break-reminder", {
+                delayInMinutes: BREAK_INTERVAL,
+                periodInMinutes: BREAK_INTERVAL
+            });
+            console.log(`✅ Break reminder alarm set for every ${BREAK_INTERVAL} minutes`);
+
+            await chrome.alarms.clear("posture-check");
+            await chrome.alarms.create("posture-check", {
+                delayInMinutes: POSTURE_INTERVAL,
+                periodInMinutes: POSTURE_INTERVAL
+            });
+            console.log(`✅ Posture check alarm set for every ${POSTURE_INTERVAL} minutes`);
+
+            await chrome.alarms.clear("daily-summary");
+            await chrome.alarms.create("daily-summary", {
+                delayInMinutes: DAILY_INTERVAL,
+                periodInMinutes: DAILY_INTERVAL
+            });
+            console.log(`✅ Daily summary alarm set for every ${DAILY_INTERVAL} minutes`);
+
+            const alarms = await chrome.alarms.getAll();
+            console.log("📋 All active alarms after setup:", alarms.map(alarm => ({
+                name: alarm.name,
+                scheduledTime: new Date(alarm.scheduledTime).toLocaleString(),
+                periodInMinutes: alarm.periodInMinutes
+            })));
+
+        } catch (error) {
+            console.error("❌ Failed to setup default alarms:", error);
+        }
+    }
+
+    async handleBreakReminder() {
+        try {
+            console.log('👁️ Break reminder triggered at:', new Date().toLocaleString());
+            console.log('🔍 Handling break reminder - fetching user data...');
+            
+            // Get user data from storage
+            const userData = await chrome.storage.local.get(['eyezen_user_data']);
+            const userDataObj = userData.eyezen_user_data || {
+                settings: { reminderEnabled: true, reminderInterval: 20 },
+                breaks: [],
+                metrics: []
+            };
+            
+            console.log('📋 User data retrieved:', {
+                hasUserData: !!userDataObj,
+                reminderEnabled: userDataObj?.settings?.reminderEnabled,
+                breaksCount: userDataObj?.breaks?.length || 0,
+                metricsCount: userDataObj?.metrics?.length || 0
+            });
+            
+            if (!userDataObj || !userDataObj.settings.reminderEnabled) {
+                console.log('❌ Break reminder skipped - no user data or reminders disabled');
+                return;
+            }
+            
+            // Check if user is currently in a break
+            const activeBreak = userDataObj.breaks.find(b => !b.completed);
+            if (activeBreak) {
+                console.log('⏸️ User is already in a break, skipping reminder:', activeBreak.id);
+                return;
+            }
+            
+            console.log('✅ Proceeding with break reminder notification...');
+            
+            // Check recent activity to determine reminder urgency
+            const recentMetrics = userDataObj.metrics.slice(-5);
+            const avgEyeStrain = recentMetrics.length > 0 
+                ? recentMetrics.reduce((sum, m) => sum + (m.fatigueIndex || 0), 0) / recentMetrics.length 
+                : 0.3;
+            
+            let title = '👁️ Time for an Eye Break!';
+            let message = 'Follow the 20-20-20 rule: Look at something 20 feet away for 20 seconds.';
+            let priority = 0;
+            
+            if (avgEyeStrain > 0.7) {
+                title = '⚠️ High Eye Strain Detected!';
+                message = 'Your eyes need immediate rest. Take a break now to prevent fatigue.';
+                priority = 2;
+            } else if (avgEyeStrain > 0.5) {
+                title = '😴 Eyes Getting Tired';
+                message = 'Time for a refreshing eye break. Your future self will thank you!';
+                priority = 1;
+            } else {
+                // Generate AI-powered rest suggestion
+                try {
+                    const aiSuggestion = await this.chromeAI.generateHealthSuggestion(
+                        avgEyeStrain * 100, // Convert to percentage
+                        avgEyeStrain * 100, // Use same value for fatigue score
+                        {
+                            blinkRate: 15,
+                            fatigueIndex: avgEyeStrain,
+                            posture: 'GOOD',
+                            earValue: 0.25,
+                            perclosValue: 0.2,
+                            timestamp: Date.now()
+                        }
+                    );
+                    
+                    title = `🤖 AI Rest Suggestion (${aiSuggestion.category})`;
+                    message = aiSuggestion.message;
+                    priority = 1;
+                } catch (error) {
+                    console.error('Failed to generate AI suggestion:', error);
+                    // Fallback to default message
+                    title = '⏰ Break Time Reminder';
+                    message = 'Time for your scheduled eye break! Follow the 20-20-20 rule: Look at something 20 feet away for 20 seconds.';
+                    priority = 1;
+                }
+            }
+            
+            console.log('🔔 Preparing notification:', {
+                title,
+                message,
+                priority,
+                timestamp: new Date().toLocaleString()
+            });
+            
+            await this.showNotification({
+                type: 'basic',
+                iconUrl: 'assets/icons/icon-48.png',
+                title,
+                message,
+                priority,
+                contextMessage: `Next reminder in ${userDataObj.settings.reminderInterval} minutes`,
+                requireInteraction: priority >= 1,
+                buttons: [
+                    { title: '🧘 Start Break', iconUrl: 'assets/icons/icon-16.png' },
+                    { title: '⏰ Snooze 5min', iconUrl: 'assets/icons/icon-16.png' }
+                ]
+            });
+            
+            console.log('✅ Break reminder notification sent successfully at:', new Date().toLocaleString());
+            
+        } catch (error) {
+            console.error('❌ Error in break reminder:', error);
+            console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+        }
+    }
+
+    async handlePostureCheck() {
+        console.log("🏃 Posture check triggered");
+    }
+
+    async handleDailySummary() {
+        console.log("📊 Daily summary triggered");
+    }
+
+    async setupInitialData() {
+        console.log("📊 Setting up initial data");
+    }
+
+    async showNotification(options) {
+        try {
+            console.log('🔔 showNotification called with options:', {
+                type: options.type,
+                iconUrl: options.iconUrl,
+                title: options.title,
+                message: options.message,
+                priority: options.priority,
+                buttonsCount: options.buttons?.length || 0,
+                timestamp: new Date().toLocaleString()
+            });
+            
+            // Check if notifications API is available
+            if (!chrome.notifications) {
+                console.error('❌ chrome.notifications API not available');
+                throw new Error('Notifications API not available');
+            }
+            
+            // Check notification permissions using chrome.permissions API
+            try {
+                const hasPermission = await chrome.permissions.contains({
+                    permissions: ['notifications']
+                });
+                console.log('🔐 Notification permission granted:', hasPermission);
+                
+                if (!hasPermission) {
+                    console.error('❌ Notification permission not granted');
+                    throw new Error('Notification permission not granted');
+                }
+            } catch (permError) {
+                console.warn('⚠️ Could not check notification permissions:', permError);
+                // Continue anyway as permissions might be granted by default
+            }
+            
+            const notificationId = `eyezen-${Date.now()}`;
+            console.log('📢 Creating notification with ID:', notificationId);
+            
+            // Enhanced notification options with richer content
+            const notificationOptions = {
+                type: 'basic',
+                iconUrl: 'assets/icons/icon-48.png',
+                title: 'EyeZen',
+                message: '',
+                priority: 0,
+                ...options
+            };
+            
+            console.log('📋 Final notification options:', notificationOptions);
+            
+            // Create the notification
+            await chrome.notifications.create(notificationId, notificationOptions);
+            console.log('✅ Notification created successfully with ID:', notificationId);
+            
+            return notificationId;
+            
+        } catch (error) {
+            console.error('❌ Error creating notification:', error);
+            console.error('❌ Notification error details:', error instanceof Error ? error.stack : 'No stack trace');
+            throw error;
+        }
+    }
+}
+
+// Initialize the service
+console.log("🚀 EyeZen Service Worker: Starting initialization...");
+console.log("🔍 TESTING: BackgroundService instantiation about to happen");
+
+const backgroundService = new BackgroundService();
+
+// Initialize the service in an async IIFE
+(async () => {
+    try {
+        await backgroundService.initialize();
+        console.log("✅ EyeZen Service Worker: Initialization completed");
+    } catch (error) {
+        console.error("❌ EyeZen Service Worker: Initialization failed:", error);
+    }
+})();
+
+// Notification event listeners
+chrome.notifications.onClicked.addListener((notificationId) => {
+    console.log("🔔 Notification clicked:", {
+        notificationId: notificationId,
+        timestamp: new Date().toLocaleString()
+    });
+    
+    if (notificationId.startsWith("eyezen-")) {
+        chrome.action.openPopup();
+        console.log("✅ Popup opened from notification click");
+        chrome.notifications.clear(notificationId);
+        console.log("✅ Notification cleared after click");
+    }
+});
+
+chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
+    console.log("🔘 Notification button clicked:", {
+        notificationId: notificationId,
+        buttonIndex: buttonIndex,
+        timestamp: new Date().toLocaleString()
+    });
+    
+    if (notificationId.startsWith("eyezen-")) {
+        if (buttonIndex === 0) {
+            console.log("▶️ Starting break session from notification");
+            await backgroundService.initialize();
+            chrome.runtime.sendMessage({ action: "START_BREAK", breakType: "SHORT" }, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.log("⚠️ Error sending START_BREAK message:", chrome.runtime.lastError.message);
+                }
+            });
+            console.log("✅ Break session started");
+        } else if (buttonIndex === 1) {
+            console.log("😴 Snoozing reminder from notification");
+            await backgroundService.initialize();
+            chrome.runtime.sendMessage({ action: "SNOOZE_REMINDER", minutes: 5 }, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.log("⚠️ Error sending SNOOZE_REMINDER message:", chrome.runtime.lastError.message);
+                }
+            });
+            console.log("✅ Reminder snoozed for 5 minutes");
+        } else {
+            console.warn("❓ Unknown button index:", buttonIndex);
+        }
+        
+        chrome.notifications.clear(notificationId);
+        console.log("✅ Notification cleared after button click");
+    }
+});

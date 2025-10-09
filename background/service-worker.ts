@@ -1088,11 +1088,16 @@ class BackgroundService {
 // Initialize the background service
 console.log('🚀 EyeZen Service Worker: Starting initialization...');
 const backgroundService = new BackgroundService();
-backgroundService.initialize().then(() => {
-  console.log('✅ EyeZen Service Worker: Initialization completed');
-}).catch((error) => {
-  console.error('❌ EyeZen Service Worker: Initialization failed:', error);
-});
+
+// Use an immediately invoked async function to properly handle initialization
+(async () => {
+  try {
+    await backgroundService.initialize();
+    console.log('✅ EyeZen Service Worker: Initialization completed');
+  } catch (error) {
+    console.error('❌ EyeZen Service Worker: Initialization failed:', error);
+  }
+})();
 
 // Handle notification clicks
 chrome.notifications.onClicked.addListener((notificationId) => {

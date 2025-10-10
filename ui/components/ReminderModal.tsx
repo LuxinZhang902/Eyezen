@@ -89,8 +89,8 @@ const ReminderModal: React.FC<ReminderModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-80 max-w-sm mx-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-6 w-96 max-w-md mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-800">Break Reminders</h3>
           <button
@@ -135,21 +135,17 @@ const ReminderModal: React.FC<ReminderModalProps> = ({
           <label className="block text-sm font-medium text-gray-700 mb-3">
             Set reminder interval:
           </label>
-          <div className="space-y-2">
+          <select
+            value={selectedInterval}
+            onChange={(e) => setSelectedInterval(Number(e.target.value))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-sm"
+          >
             {intervalOptions.map((option) => (
-              <label key={option.value} className="flex items-center">
-                <input
-                  type="radio"
-                  name="interval"
-                  value={option.value}
-                  checked={selectedInterval === option.value}
-                  onChange={(e) => setSelectedInterval(Number(e.target.value))}
-                  className="mr-3 text-green-600 focus:ring-green-500"
-                />
-                <span className="text-sm text-gray-700">{option.label}</span>
-              </label>
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
             ))}
-          </div>
+          </select>
         </div>
 
         <div className="flex space-x-3">
@@ -190,6 +186,24 @@ const ReminderModal: React.FC<ReminderModalProps> = ({
           <p className="text-xs text-green-800">
             💡 When the reminder triggers, you'll see a notification with resting suggestions to help protect your eyes.
           </p>
+        </div>
+
+        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-start space-x-2">
+            <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-xs font-medium text-blue-800 mb-1">
+                📱 Enable macOS Notifications
+              </p>
+              <p className="text-xs text-blue-700 leading-relaxed">
+                For notifications to appear, go to <strong>System Preferences → Notifications & Focus</strong>, 
+                find <strong>"Google Chrome"</strong>, and set alert style to <strong>"Alerts"</strong> 
+                with <strong>"Show previews"</strong> enabled.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -18,7 +18,7 @@ const ALARM_NAMES = {
 } as const;
 
 const DEFAULT_INTERVALS = {
-  BREAK_REMINDER: 0.5, // 30 seconds (minimum allowed in Chrome 120+) <mcreference link="https://developer.chrome.com/docs/extensions/reference/api/alarms" index="1">1</mcreference>
+  BREAK_REMINDER: 2, // 2 minutes (matches minimum option in ReminderModal)
   POSTURE_CHECK: 30,  // 30 minutes for posture reminders
   DAILY_SUMMARY: 24 * 60, // Daily at end of day
   WEEKLY_SUMMARY: 7 * 24 * 60 // Weekly summary

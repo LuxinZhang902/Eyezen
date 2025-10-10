@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EyeZen Notification Debug Tool</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .test-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #ffd700;
+        }
+        button {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .success { background: linear-gradient(45deg, #00b894, #00a085); }
+        .warning { background: linear-gradient(45deg, #fdcb6e, #e17055); }
+        .info { background: linear-gradient(45deg, #74b9ff, #0984e3); }
+        
+        #log {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .log-success { background: rgba(0, 184, 148, 0.2); }
+        .log-error { background: rgba(255, 107, 107, 0.2); }
+        .log-warning { background: rgba(253, 203, 110, 0.2); }
+        .log-info { background: rgba(116, 185, 255, 0.2); }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-online { background: #00b894; }
+        .status-offline { background: #ff6b6b; }
+        .status-unknown { background: #fdcb6e; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 EyeZen Notification Debug Tool</h1>
+        
+        <div class="test-section">
+            <h3>🔍 System Diagnostics</h3>
+            <button onclick="checkExtensionStatus()" class="info">Check Extension Status</button>
+            <button onclick="checkNotificationPermissions()" class="info">Check Notification Permissions</button>
+            <button onclick="checkSystemNotifications()" class="warning">Test System Notifications</button>
+            <button onclick="pingServiceWorker()" class="success">Ping Service Worker</button>
+        </div>
+
+        <div class="test-section">
+            <h3>🧪 Chrome Extension Notification Tests</h3>
+            <button onclick="testBasicNotification()">Test Basic Notification</button>
+            <button onclick="testInteractiveNotification()">Test Interactive Notification</button>
+            <button onclick="testHighPriorityNotification()">Test High Priority Notification</button>
+            <button onclick="testNotificationWithButtons()">Test Notification with Buttons</button>
+        </div>
+
+        <div class="test-section">
+            <h3>⏰ Alarm & Break Reminder Tests</h3>
+            <button onclick="triggerBreakReminder()" class="success">Trigger Break Reminder</button>
+            <button onclick="triggerPostureCheck()" class="warning">Trigger Posture Check</button>
+            <button onclick="triggerDailySummary()" class="info">Trigger Daily Summary</button>
+            <button onclick="listActiveAlarms()">List Active Alarms</button>
+        </div>
+
+        <div class="test-section">
+            <h3>🔧 Advanced Debugging</h3>
+            <button onclick="getAllNotifications()">Get All Active Notifications</button>
+            <button onclick="clearAllNotifications()">Clear All Notifications</button>
+            <button onclick="testNotificationEvents()">Test Notification Events</button>
+            <button onclick="checkManifestPermissions()">Check Manifest Permissions</button>
+        </div>
+
+        <div id="log"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        async function checkExtensionStatus() {
+            log('🔍 Checking extension status...', 'info');
+            
+            if (typeof chrome === 'undefined') {
+                log('❌ Chrome APIs not available - not running in extension context', 'error');
+                return;
+            }
+
+            if (chrome.runtime && chrome.runtime.id) {
+                log(`✅ Extension ID: ${chrome.runtime.id}`, 'success');
+            }
+
+            if (chrome.notifications) {
+                log('✅ Chrome notifications API is available', 'success');
+                
+                try {
+                    const permissionLevel = await chrome.notifications.getPermissionLevel();
+                    log(`🔐 Notification permission level: ${permissionLevel}`, permissionLevel === 'granted' ? 'success' : 'warning');
+                } catch (error) {
+                    log(`❌ Error checking permission level: ${error.message}`, 'error');
+                }
+            } else {
+                log('❌ Chrome notifications API not available', 'error');
+            }
+        }
+
+        async function checkNotificationPermissions() {
+            log('🔐 Checking notification permissions...', 'info');
+            
+            if (!chrome.notifications) {
+                log('❌ Chrome notifications API not available', 'error');
+                return;
+            }
+
+            try {
+                const permissionLevel = await chrome.notifications.getPermissionLevel();
+                log(`📋 Permission level: ${permissionLevel}`, permissionLevel === 'granted' ? 'success' : 'warning');
+                
+                if (permissionLevel === 'denied') {
+                    log('⚠️ Notifications are denied. Please enable in Chrome settings: chrome://settings/content/notifications', 'warning');
+                } else if (permissionLevel === 'granted') {
+                    log('✅ Notifications are fully enabled', 'success');
+                }
+            } catch (error) {
+                log(`❌ Error checking permissions: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkSystemNotifications() {
+            log('🖥️ Testing system notification API...', 'info');
+            
+            if ('Notification' in window) {
+                const permission = await Notification.requestPermission();
+                log(`📋 System notification permission: ${permission}`, permission === 'granted' ? 'success' : 'warning');
+                
+                if (permission === 'granted') {
+                    const notification = new Notification('System Test', {
+                        body: 'This is a system notification test',
+                        icon: 'assets/icons/icon-128.png'
+                    });
+                    log('✅ System notification created', 'success');
+                    
+                    setTimeout(() => notification.close(), 5000);
+                }
+            } else {
+                log('❌ System notifications not supported', 'error');
+            }
+        }
+
+        async function pingServiceWorker() {
+            log('📡 Pinging service worker...', 'info');
+            
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    action: 'ping',
+                    timestamp: Date.now()
+                });
+                log(`✅ Service worker response: ${JSON.stringify(response)}`, 'success');
+            } catch (error) {
+                log(`❌ Service worker ping failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testBasicNotification() {
+            log('🔔 Testing basic Chrome extension notification...', 'info');
+            
+            if (!chrome.notifications) {
+                log('❌ Chrome notifications API not available', 'error');
+                return;
+            }
+
+            const notificationId = `test-basic-${Date.now()}`;
+            const options = {
+                type: 'basic',
+                iconUrl: 'assets/icons/icon-128.png',
+                title: 'Basic Test Notification',
+                message: 'This is a basic notification test from EyeZen extension.',
+                requireInteraction: true,
+                priority: 2
+            };
+
+            chrome.notifications.create(notificationId, options, (createdId) => {
+                if (chrome.runtime.lastError) {
+                    log(`❌ Failed to create basic notification: ${chrome.runtime.lastError.message}`, 'error');
+                } else {
+                    log(`✅ Basic notification created with ID: ${createdId}`, 'success');
+                }
+            });
+        }
+
+        async function testInteractiveNotification() {
+            log('🔔 Testing interactive notification...', 'info');
+            
+            const notificationId = `test-interactive-${Date.now()}`;
+            const options = {
+                type: 'basic',
+                iconUrl: 'assets/icons/icon-128.png',
+                title: 'Interactive Test',
+                message: 'Click this notification to test interaction!',
+                requireInteraction: true,
+                priority: 2
+            };
+
+            chrome.notifications.create(notificationId, options, (createdId) => {
+                if (chrome.runtime.lastError) {
+                    log(`❌ Failed to create interactive notification: ${chrome.runtime.lastError.message}`, 'error');
+                } else {
+                    log(`✅ Interactive notification created: ${createdId}`, 'success');
+                }
+            });
+        }
+
+        async function testHighPriorityNotification() {
+            log('🔔 Testing high priority notification...', 'info');
+            
+            const notificationId = `test-priority-${Date.now()}`;
+            const options = {
+                type: 'basic',
+                iconUrl: 'assets/icons/icon-128.png',
+                title: '🚨 HIGH PRIORITY TEST',
+                message: 'This is a high priority notification that should demand attention!',
+                requireInteraction: true,
+                priority: 2
+            };
+
+            chrome.notifications.create(notificationId, options, (createdId) => {
+                if (chrome.runtime.lastError) {
+                    log(`❌ Failed to create high priority notification: ${chrome.runtime.lastError.message}`, 'error');
+                } else {
+                    log(`✅ High priority notification created: ${createdId}`, 'success');
+                }
+            });
+        }
+
+        async function testNotificationWithButtons() {
+            log('🔔 Testing notification with buttons...', 'info');
+            
+            const notificationId = `test-buttons-${Date.now()}`;
+            const options = {
+                type: 'basic',
+                iconUrl: 'assets/icons/icon-128.png',
+                title: 'Button Test',
+                message: 'This notification has action buttons!',
+                requireInteraction: true,
+                priority: 2,
+                buttons: [
+                    { title: 'Action 1' },
+                    { title: 'Action 2' }
+                ]
+            };
+
+            chrome.notifications.create(notificationId, options, (createdId) => {
+                if (chrome.runtime.lastError) {
+                    log(`❌ Failed to create notification with buttons: ${chrome.runtime.lastError.message}`, 'error');
+                } else {
+                    log(`✅ Notification with buttons created: ${createdId}`, 'success');
+                }
+            });
+        }
+
+        async function triggerBreakReminder() {
+            log('⏰ Triggering break reminder...', 'info');
+            
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    action: 'triggerAlarm',
+                    alarmName: 'break-reminder'
+                });
+                log(`✅ Break reminder triggered: ${JSON.stringify(response)}`, 'success');
+            } catch (error) {
+                log(`❌ Failed to trigger break reminder: ${error.message}`, 'error');
+            }
+        }
+
+        async function triggerPostureCheck() {
+            log('🏃 Triggering posture check...', 'info');
+            
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    action: 'triggerAlarm',
+                    alarmName: 'posture-check'
+                });
+                log(`✅ Posture check triggered: ${JSON.stringify(response)}`, 'success');
+            } catch (error) {
+                log(`❌ Failed to trigger posture check: ${error.message}`, 'error');
+            }
+        }
+
+        async function triggerDailySummary() {
+            log('📊 Triggering daily summary...', 'info');
+            
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    action: 'triggerAlarm',
+                    alarmName: 'daily-summary'
+                });
+                log(`✅ Daily summary triggered: ${JSON.stringify(response)}`, 'success');
+            } catch (error) {
+                log(`❌ Failed to trigger daily summary: ${error.message}`, 'error');
+            }
+        }
+
+        async function listActiveAlarms() {
+            log('⏰ Listing active alarms...', 'info');
+            
+            try {
+                chrome.alarms.getAll((alarms) => {
+                    if (alarms.length === 0) {
+                        log('📋 No active alarms found', 'warning');
+                    } else {
+                        log(`📋 Found ${alarms.length} active alarms:`, 'info');
+                        alarms.forEach(alarm => {
+                            const nextFire = new Date(alarm.scheduledTime).toLocaleString();
+                            log(`  • ${alarm.name}: next fire at ${nextFire}`, 'info');
+                        });
+                    }
+                });
+            } catch (error) {
+                log(`❌ Failed to list alarms: ${error.message}`, 'error');
+            }
+        }
+
+        async function getAllNotifications() {
+            log('📋 Getting all active notifications...', 'info');
+            
+            if (!chrome.notifications) {
+                log('❌ Chrome notifications API not available', 'error');
+                return;
+            }
+
+            chrome.notifications.getAll((notifications) => {
+                const count = Object.keys(notifications).length;
+                if (count === 0) {
+                    log('📋 No active notifications found', 'warning');
+                } else {
+                    log(`📋 Found ${count} active notifications:`, 'info');
+                    Object.entries(notifications).forEach(([id, notification]) => {
+                        log(`  • ${id}: "${notification.title}" - "${notification.message}"`, 'info');
+                    });
+                }
+            });
+        }
+
+        async function clearAllNotifications() {
+            log('🗑️ Clearing all notifications...', 'info');
+            
+            chrome.notifications.getAll((notifications) => {
+                const ids = Object.keys(notifications);
+                if (ids.length === 0) {
+                    log('📋 No notifications to clear', 'info');
+                    return;
+                }
+
+                let cleared = 0;
+                ids.forEach(id => {
+                    chrome.notifications.clear(id, (wasCleared) => {
+                        if (wasCleared) {
+                            cleared++;
+                            log(`✅ Cleared notification: ${id}`, 'success');
+                        } else {
+                            log(`❌ Failed to clear notification: ${id}`, 'error');
+                        }
+                        
+                        if (cleared === ids.length) {
+                            log(`🗑️ Cleared ${cleared} notifications`, 'success');
+                        }
+                    });
+                });
+            });
+        }
+
+        async function testNotificationEvents() {
+            log('🎯 Testing notification event listeners...', 'info');
+            
+            // Test if event listeners are working
+            const testId = `event-test-${Date.now()}`;
+            
+            // Create a temporary event listener
+            const clickListener = (notificationId) => {
+                if (notificationId === testId) {
+                    log(`✅ Notification click event received for: ${notificationId}`, 'success');
+                    chrome.notifications.onClicked.removeListener(clickListener);
+                }
+            };
+            
+            chrome.notifications.onClicked.addListener(clickListener);
+            
+            const options = {
+                type: 'basic',
+                iconUrl: 'assets/icons/icon-128.png',
+                title: 'Event Test',
+                message: 'Click this notification to test event handling!',
+                requireInteraction: true,
+                priority: 2
+            };
+
+            chrome.notifications.create(testId, options, (createdId) => {
+                if (chrome.runtime.lastError) {
+                    log(`❌ Failed to create event test notification: ${chrome.runtime.lastError.message}`, 'error');
+                } else {
+                    log(`✅ Event test notification created: ${createdId}. Click it to test events!`, 'success');
+                }
+            });
+        }
+
+        async function checkManifestPermissions() {
+            log('📋 Checking manifest permissions...', 'info');
+            
+            try {
+                const manifest = chrome.runtime.getManifest();
+                log(`📋 Extension name: ${manifest.name}`, 'info');
+                log(`📋 Extension version: ${manifest.version}`, 'info');
+                log(`📋 Manifest version: ${manifest.manifest_version}`, 'info');
+                
+                if (manifest.permissions) {
+                    log(`📋 Permissions: ${manifest.permissions.join(', ')}`, 'info');
+                    
+                    if (manifest.permissions.includes('notifications')) {
+                        log('✅ Notifications permission found in manifest', 'success');
+                    } else {
+                        log('❌ Notifications permission NOT found in manifest', 'error');
+                    }
+                } else {
+                    log('⚠️ No permissions found in manifest', 'warning');
+                }
+            } catch (error) {
+                log(`❌ Failed to check manifest: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize the debug tool
+        document.addEventListener('DOMContentLoaded', () => {
+            log('🚀 EyeZen Notification Debug Tool initialized', 'success');
+            checkExtensionStatus();
+        });
+    </script>
+</body>
+</html>

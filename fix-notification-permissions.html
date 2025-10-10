@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fix EyeZen Notification Permissions</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .step-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .step-section h3 {
+            margin-top: 0;
+            color: #ffd700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .step-number {
+            background: #ff6b6b;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        button {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+        .success { background: linear-gradient(45deg, #00b894, #00a085); }
+        .warning { background: linear-gradient(45deg, #fdcb6e, #e17055); }
+        .info { background: linear-gradient(45deg, #74b9ff, #0984e3); }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-granted { background: #00b894; }
+        .status-denied { background: #ff6b6b; }
+        .status-unknown { background: #fdcb6e; }
+        
+        .instruction-list {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .instruction-list li {
+            margin: 8px 0;
+            padding-left: 10px;
+        }
+        
+        #log {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .log-success { background: rgba(0, 184, 148, 0.2); }
+        .log-error { background: rgba(255, 107, 107, 0.2); }
+        .log-warning { background: rgba(253, 203, 110, 0.2); }
+        .log-info { background: rgba(116, 185, 255, 0.2); }
+        
+        .chrome-url {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-family: monospace;
+            color: #74b9ff;
+            margin: 5px 0;
+            display: inline-block;
+        }
+        
+        .permission-status {
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .permission-granted {
+            background: rgba(0, 184, 148, 0.3);
+            border: 1px solid #00b894;
+        }
+        .permission-denied {
+            background: rgba(255, 107, 107, 0.3);
+            border: 1px solid #ff6b6b;
+        }
+        .permission-unknown {
+            background: rgba(253, 203, 110, 0.3);
+            border: 1px solid #fdcb6e;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 Fix EyeZen Notification Permissions</h1>
+        
+        <div class="step-section">
+            <h3><span class="step-number">1</span>Check Current Permission Status</h3>
+            <p>First, let's check the current notification permission status for your EyeZen extension.</p>
+            <button onclick="checkPermissionStatus()" class="info">Check Permission Status</button>
+            <div id="permission-status"></div>
+        </div>
+
+        <div class="step-section">
+            <h3><span class="step-number">2</span>Chrome Extension Settings</h3>
+            <p>If notifications are disabled, you need to enable them in Chrome's extension settings:</p>
+            <ol class="instruction-list">
+                <li>Open Chrome and go to: <span class="chrome-url">chrome://extensions/</span></li>
+                <li>Find "EyeZen - AI Eye Health Monitor" in the list</li>
+                <li>Click on "Details" button for the EyeZen extension</li>
+                <li>Scroll down to the "Permissions" section</li>
+                <li>Make sure "Notifications" permission is enabled</li>
+                <li>If it's disabled, toggle it ON</li>
+            </ol>
+            <button onclick="openExtensionsPage()" class="warning">Open Extensions Page</button>
+        </div>
+
+        <div class="step-section">
+            <h3><span class="step-number">3</span>Chrome Notification Settings</h3>
+            <p>Check Chrome's global notification settings:</p>
+            <ol class="instruction-list">
+                <li>Go to: <span class="chrome-url">chrome://settings/content/notifications</span></li>
+                <li>Make sure "Sites can ask to send notifications" is enabled</li>
+                <li>Check if Chrome extensions are in the "Block" list</li>
+                <li>If blocked, move them to "Allow" list</li>
+            </ol>
+            <button onclick="openNotificationSettings()" class="warning">Open Notification Settings</button>
+        </div>
+
+        <div class="step-section">
+            <h3><span class="step-number">4</span>System Notification Settings (macOS)</h3>
+            <p>On macOS, you may also need to check system-level notification settings:</p>
+            <ol class="instruction-list">
+                <li>Open System Preferences → Notifications & Focus</li>
+                <li>Find "Google Chrome" in the application list</li>
+                <li>Make sure notifications are enabled for Chrome</li>
+                <li>Set notification style to "Alerts" or "Banners"</li>
+                <li>Enable "Show previews" if desired</li>
+            </ol>
+            <button onclick="showSystemInstructions()" class="info">Show System Instructions</button>
+        </div>
+
+        <div class="step-section">
+            <h3><span class="step-number">5</span>Test Notifications</h3>
+            <p>After enabling permissions, test if notifications are working:</p>
+            <button onclick="testBasicNotification()" class="success">Test Basic Notification</button>
+            <button onclick="testInteractiveNotification()" class="success">Test Interactive Notification</button>
+            <button onclick="testBreakReminder()" class="success">Test Break Reminder</button>
+        </div>
+
+        <div class="step-section">
+            <h3><span class="step-number">6</span>Advanced Troubleshooting</h3>
+            <p>If notifications still don't work, try these advanced steps:</p>
+            <button onclick="clearNotificationData()" class="warning">Clear Notification Data</button>
+            <button onclick="reloadExtension()" class="warning">Reload Extension</button>
+            <button onclick="checkServiceWorker()" class="info">Check Service Worker</button>
+        </div>
+
+        <div id="log"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        async function checkPermissionStatus() {
+            log('🔍 Checking notification permission status...', 'info');
+            const statusDiv = document.getElementById('permission-status');
+            
+            if (!chrome.notifications) {
+                statusDiv.innerHTML = '<div class="permission-status permission-denied">❌ Chrome notifications API not available</div>';
+                log('❌ Chrome notifications API not available', 'error');
+                return;
+            }
+
+            try {
+                const permissionLevel = await chrome.notifications.getPermissionLevel();
+                log(`📋 Permission level: ${permissionLevel}`, 'info');
+                
+                let statusClass, statusIcon, statusText, instructions;
+                
+                switch(permissionLevel) {
+                    case 'granted':
+                        statusClass = 'permission-granted';
+                        statusIcon = '✅';
+                        statusText = 'Notifications are ENABLED';
+                        instructions = 'Great! Notifications should work. If they don\'t appear, check system settings.';
+                        break;
+                    case 'denied':
+                        statusClass = 'permission-denied';
+                        statusIcon = '❌';
+                        statusText = 'Notifications are DISABLED';
+                        instructions = 'You need to enable notifications in Chrome extension settings (Step 2).';
+                        break;
+                    default:
+                        statusClass = 'permission-unknown';
+                        statusIcon = '⚠️';
+                        statusText = `Permission status: ${permissionLevel}`;
+                        instructions = 'Unknown permission status. Try the troubleshooting steps below.';
+                }
+                
+                statusDiv.innerHTML = `
+                    <div class="permission-status ${statusClass}">
+                        ${statusIcon} ${statusText}
+                    </div>
+                    <p>${instructions}</p>
+                `;
+                
+                log(`✅ Permission check complete: ${permissionLevel}`, 'success');
+                
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="permission-status permission-denied">❌ Error checking permissions</div>';
+                log(`❌ Error checking permissions: ${error.message}`, 'error');
+            }
+        }
+
+        function openExtensionsPage() {
+            log('🔗 Opening Chrome extensions page...', 'info');
+            chrome.tabs.create({ url: 'chrome://extensions/' });
+        }
+
+        function openNotificationSettings() {
+            log('🔗 Opening Chrome notification settings...', 'info');
+            chrome.tabs.create({ url: 'chrome://settings/content/notifications' });
+        }
+
+        function showSystemInstructions() {
+            log('📱 Showing system notification instructions...', 'info');
+            alert(`macOS System Notification Settings:
+
+1. Click Apple menu → System Preferences
+2. Click "Notifications & Focus"
+3. Find "Google Chrome" in the left sidebar
+4. Make sure notifications are enabled
+5. Set alert style to "Alerts" or "Banners"
+6. Enable "Show previews" if desired
+
+For other operating systems:
+- Windows: Settings → System → Notifications & actions
+- Linux: Varies by desktop environment`);
+        }
+
+        async function testBasicNotification() {
+            log('🔔 Testing basic notification...', 'info');
+            
+            const notificationId = `test-basic-${Date.now()}`;
+            const options = {
+                type: 'basic',
+                iconUrl: 'assets/icons/icon-128.png',
+                title: '✅ Permission Test Successful!',
+                message: 'If you can see this notification, permissions are working correctly.',
+                requireInteraction: true,
+                priority: 2
+            };
+
+            chrome.notifications.create(notificationId, options, (createdId) => {
+                if (chrome.runtime.lastError) {
+                    log(`❌ Failed to create test notification: ${chrome.runtime.lastError.message}`, 'error');
+                } else {
+                    log(`✅ Test notification created successfully: ${createdId}`, 'success');
+                }
+            });
+        }
+
+        async function testInteractiveNotification() {
+            log('🔔 Testing interactive notification...', 'info');
+            
+            const notificationId = `test-interactive-${Date.now()}`;
+            const options = {
+                type: 'basic',
+                iconUrl: 'assets/icons/icon-128.png',
+                title: '🎯 Interactive Test',
+                message: 'Click this notification to confirm interaction works!',
+                requireInteraction: true,
+                priority: 2,
+                buttons: [
+                    { title: 'It Works!' },
+                    { title: 'Dismiss' }
+                ]
+            };
+
+            chrome.notifications.create(notificationId, options, (createdId) => {
+                if (chrome.runtime.lastError) {
+                    log(`❌ Failed to create interactive notification: ${chrome.runtime.lastError.message}`, 'error');
+                } else {
+                    log(`✅ Interactive notification created: ${createdId}`, 'success');
+                }
+            });
+        }
+
+        async function testBreakReminder() {
+            log('⏰ Testing break reminder notification...', 'info');
+            
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    action: 'triggerAlarm',
+                    alarmName: 'break-reminder'
+                });
+                log(`✅ Break reminder triggered: ${JSON.stringify(response)}`, 'success');
+            } catch (error) {
+                log(`❌ Failed to trigger break reminder: ${error.message}`, 'error');
+            }
+        }
+
+        async function clearNotificationData() {
+            log('🗑️ Clearing notification data...', 'info');
+            
+            try {
+                chrome.notifications.getAll((notifications) => {
+                    const ids = Object.keys(notifications);
+                    if (ids.length === 0) {
+                        log('📋 No notifications to clear', 'info');
+                        return;
+                    }
+
+                    ids.forEach(id => {
+                        chrome.notifications.clear(id, (wasCleared) => {
+                            if (wasCleared) {
+                                log(`✅ Cleared notification: ${id}`, 'success');
+                            }
+                        });
+                    });
+                });
+            } catch (error) {
+                log(`❌ Error clearing notifications: ${error.message}`, 'error');
+            }
+        }
+
+        async function reloadExtension() {
+            log('🔄 Reloading extension...', 'info');
+            
+            try {
+                chrome.runtime.reload();
+                log('✅ Extension reload initiated', 'success');
+            } catch (error) {
+                log(`❌ Failed to reload extension: ${error.message}`, 'error');
+                alert('Please manually reload the extension:\n1. Go to chrome://extensions/\n2. Find EyeZen extension\n3. Click the reload button');
+            }
+        }
+
+        async function checkServiceWorker() {
+            log('🔧 Checking service worker status...', 'info');
+            
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    action: 'ping',
+                    timestamp: Date.now()
+                });
+                log(`✅ Service worker is active: ${JSON.stringify(response)}`, 'success');
+            } catch (error) {
+                log(`❌ Service worker issue: ${error.message}`, 'error');
+                log('💡 Try reloading the extension or restarting Chrome', 'warning');
+            }
+        }
+
+        // Initialize the tool
+        document.addEventListener('DOMContentLoaded', () => {
+            log('🚀 EyeZen Permission Fix Tool initialized', 'success');
+            log('👆 Click "Check Permission Status" to start diagnosing', 'info');
+        });
+    </script>
+</body>
+</html>

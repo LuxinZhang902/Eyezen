@@ -289,186 +289,162 @@ class BackgroundService {
     }
 
     async handleBreakReminder() {
-        try {
-            console.log('👁️ Break reminder triggered at:', new Date().toLocaleString());
-            console.log('🔍 Handling break reminder - fetching user data...');
-            
-            // Get user data from storage
-            const userData = await chrome.storage.local.get(['eyezen_user_data']);
-            const userDataObj = userData.eyezen_user_data || {
-                settings: { reminderEnabled: true, reminderInterval: 20 },
-                breaks: [],
-                metrics: []
-            };
-            
-            console.log('📋 User data retrieved:', {
-                hasUserData: !!userDataObj,
-                reminderEnabled: userDataObj?.settings?.reminderEnabled,
-                breaksCount: userDataObj?.breaks?.length || 0,
-                metricsCount: userDataObj?.metrics?.length || 0
-            });
-            
-            if (!userDataObj || !userDataObj.settings.reminderEnabled) {
-                console.log('❌ Break reminder skipped - no user data or reminders disabled');
-                return;
-            }
-            
-            // Check if user is currently in a break
-            const activeBreak = userDataObj.breaks.find(b => !b.completed);
-            if (activeBreak) {
-                console.log('⏸️ User is already in a break, skipping reminder:', activeBreak.id);
-                return;
-            }
-            
-            console.log('✅ Proceeding with break reminder notification...');
-            
-            // Check recent activity to determine reminder urgency
-            const recentMetrics = userDataObj.metrics.slice(-5);
-            const avgEyeStrain = recentMetrics.length > 0 
-                ? recentMetrics.reduce((sum, m) => sum + (m.fatigueIndex || 0), 0) / recentMetrics.length 
-                : 0.3;
-            
-            let title = '👁️ Time for an Eye Break!';
-            let message = 'Follow the 20-20-20 rule: Look at something 20 feet away for 20 seconds.';
-            let priority = 0;
-            
-            if (avgEyeStrain > 0.7) {
-                title = '⚠️ High Eye Strain Detected!';
-                message = 'Your eyes need immediate rest. Take a break now to prevent fatigue.';
-                priority = 2;
-            } else if (avgEyeStrain > 0.5) {
-                title = '😴 Eyes Getting Tired';
-                message = 'Time for a refreshing eye break. Your future self will thank you!';
-                priority = 1;
-            } else {
-                // Generate AI-powered rest suggestion
-                try {
-                    const aiSuggestion = await this.chromeAI.generateHealthSuggestion(
-                        avgEyeStrain * 100, // Convert to percentage
-                        avgEyeStrain * 100, // Use same value for fatigue score
-                        {
-                            blinkRate: 15,
-                            fatigueIndex: avgEyeStrain,
-                            posture: 'GOOD',
-                            earValue: 0.25,
-                            perclosValue: 0.2,
-                            timestamp: Date.now()
-                        }
-                    );
-                    
-                    title = `🤖 AI Rest Suggestion (${aiSuggestion.category})`;
-                    message = aiSuggestion.message;
-                    priority = 1;
-                } catch (error) {
-                    console.error('Failed to generate AI suggestion:', error);
-                    // Fallback to default message
-                    title = '⏰ Break Time Reminder';
-                    message = 'Time for your scheduled eye break! Follow the 20-20-20 rule: Look at something 20 feet away for 20 seconds.';
-                    priority = 1;
-                }
-            }
-            
-            console.log('🔔 Preparing notification:', {
-                title,
-                message,
-                priority,
-                timestamp: new Date().toLocaleString()
-            });
-            
-            await this.showNotification({
-                type: 'basic',
-                iconUrl: 'assets/icons/icon-48.png',
-                title,
-                message,
-                priority,
-                contextMessage: `Next reminder in ${userDataObj.settings.reminderInterval} minutes`,
-                requireInteraction: priority >= 1,
-                buttons: [
-                    { title: '🧘 Start Break', iconUrl: 'assets/icons/icon-16.png' },
-                    { title: '⏰ Snooze 5min', iconUrl: 'assets/icons/icon-16.png' }
-                ]
-            });
-            
-            console.log('✅ Break reminder notification sent successfully at:', new Date().toLocaleString());
-            
-        } catch (error) {
-            console.error('❌ Error in break reminder:', error);
-            console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-        }
+        console.log("👁️ Break reminder triggered");
+        await this.showNotification({
+            type: "basic",
+            title: "EyeZen Break Reminder",
+            message: "Time for a break! Your eyes need rest to stay healthy.",
+            iconUrl: "assets/icons/icon-128.png",
+            buttons: [
+                { title: "Take Break" },
+                { title: "Snooze 5min" }
+            ],
+            priority: 2
+        });
     }
 
     async handlePostureCheck() {
         console.log("🏃 Posture check triggered");
+        await this.showNotification({
+            type: "basic",
+            title: "EyeZen Posture Check",
+            message: "Check your posture! Sit up straight and adjust your screen position.",
+            iconUrl: "assets/icons/icon-128.png",
+            priority: 1
+        });
     }
 
     async handleDailySummary() {
         console.log("📊 Daily summary triggered");
+        await this.showNotification({
+            type: "basic",
+            title: "EyeZen Daily Summary",
+            message: "Your daily eye health report is ready. Click to view your progress.",
+            iconUrl: "assets/icons/icon-128.png",
+            priority: 0
+        });
+    }
+
+    /**
+     * Show notification using Chrome Extensions Notifications API
+     * @param {Object} options - Notification options
+     * @param {string} options.type - Notification type ('basic', 'image', 'list', 'progress')
+     * @param {string} options.title - Notification title
+     * @param {string} options.message - Notification message
+     * @param {string} [options.iconUrl] - Icon URL
+     * @param {Array} [options.buttons] - Array of button objects with title property
+     * @param {number} [options.priority] - Priority level (0-2, where 2 is highest)
+     * @param {boolean} [options.requireInteraction] - Whether notification requires user interaction
+     * @returns {Promise<string>} - Promise that resolves to notification ID
+     */
+    async showNotification(options) {
+        return new Promise(async (resolve, reject) => {
+            // Validate required parameters
+            if (!options || !options.title || !options.message) {
+                const error = new Error("Missing required notification parameters: title and message are required");
+                console.error("❌ Notification error:", error.message);
+                reject(error);
+                return;
+            }
+
+            // Check if notifications API is available
+            if (!chrome.notifications) {
+                const error = new Error("Chrome notifications API is not available");
+                console.error("❌ Notification error:", error.message);
+                reject(error);
+                return;
+            }
+
+            // Check notification permission level
+            try {
+                const permissionLevel = await chrome.notifications.getPermissionLevel();
+                console.log("🔐 Notification permission level:", permissionLevel);
+                
+                if (permissionLevel === "denied") {
+                    const error = new Error("Notification permissions are denied. Please enable notifications for this extension in Chrome settings.");
+                    console.error("❌ Notification permission denied:", error.message);
+                    reject(error);
+                    return;
+                }
+            } catch (permError) {
+                console.warn("⚠️ Could not check notification permissions:", permError);
+            }
+
+            // Generate unique notification ID
+            const notificationId = `eyezen-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            
+            // Prepare notification options according to Chrome Extensions API
+            const notificationOptions = {
+                type: options.type || "basic",
+                iconUrl: options.iconUrl || "assets/icons/icon-128.png",
+                title: options.title,
+                message: options.message,
+                priority: Math.min(Math.max(options.priority || 1, 0), 2), // Clamp between 0-2
+                requireInteraction: options.requireInteraction || true // Force interaction to ensure visibility
+            };
+
+            // Add buttons if provided (max 2 buttons for basic notifications)
+            if (options.buttons && Array.isArray(options.buttons)) {
+                notificationOptions.buttons = options.buttons.slice(0, 2).map(button => ({
+                    title: button.title || "Action"
+                }));
+            }
+
+            console.log("🔔 Creating notification:", {
+                id: notificationId,
+                options: notificationOptions,
+                timestamp: new Date().toLocaleString(),
+                systemInfo: {
+                    userAgent: navigator.userAgent,
+                    platform: navigator.platform
+                }
+            });
+
+            // Create notification using Chrome Extensions API
+            chrome.notifications.create(notificationId, notificationOptions, (createdId) => {
+                if (chrome.runtime.lastError) {
+                    const error = new Error(`Failed to create notification: ${chrome.runtime.lastError.message}`);
+                    console.error("❌ Notification creation failed:", error.message);
+                    console.error("❌ Chrome runtime last error details:", chrome.runtime.lastError);
+                    reject(error);
+                    return;
+                }
+
+                console.log("✅ Notification created successfully:", {
+                    id: createdId,
+                    timestamp: new Date().toLocaleString()
+                });
+
+                // Verify notification was actually created by getting all notifications
+                chrome.notifications.getAll((notifications) => {
+                    console.log("📋 All active notifications after creation:", notifications);
+                    if (notifications[createdId]) {
+                        console.log("✅ Notification confirmed in system:", notifications[createdId]);
+                    } else {
+                        console.warn("⚠️ Notification not found in system after creation");
+                    }
+                });
+
+                // Auto-clear notification after 15 seconds (increased time)
+                if (!notificationOptions.requireInteraction) {
+                    setTimeout(() => {
+                        chrome.notifications.clear(createdId, (wasCleared) => {
+                            if (wasCleared) {
+                                console.log("🗑️ Notification auto-cleared:", createdId);
+                            } else {
+                                console.log("⚠️ Notification could not be cleared:", createdId);
+                            }
+                        });
+                    }, 15000);
+                }
+
+                resolve(createdId);
+            });
+        });
     }
 
     async setupInitialData() {
         console.log("📊 Setting up initial data");
-    }
-
-    async showNotification(options) {
-        try {
-            console.log('🔔 showNotification called with options:', {
-                type: options.type,
-                iconUrl: options.iconUrl,
-                title: options.title,
-                message: options.message,
-                priority: options.priority,
-                buttonsCount: options.buttons?.length || 0,
-                timestamp: new Date().toLocaleString()
-            });
-            
-            // Check if notifications API is available
-            if (!chrome.notifications) {
-                console.error('❌ chrome.notifications API not available');
-                throw new Error('Notifications API not available');
-            }
-            
-            // Check notification permissions using chrome.permissions API
-            try {
-                const hasPermission = await chrome.permissions.contains({
-                    permissions: ['notifications']
-                });
-                console.log('🔐 Notification permission granted:', hasPermission);
-                
-                if (!hasPermission) {
-                    console.error('❌ Notification permission not granted');
-                    throw new Error('Notification permission not granted');
-                }
-            } catch (permError) {
-                console.warn('⚠️ Could not check notification permissions:', permError);
-                // Continue anyway as permissions might be granted by default
-            }
-            
-            const notificationId = `eyezen-${Date.now()}`;
-            console.log('📢 Creating notification with ID:', notificationId);
-            
-            // Enhanced notification options with richer content
-            const notificationOptions = {
-                type: 'basic',
-                iconUrl: 'assets/icons/icon-48.png',
-                title: 'EyeZen',
-                message: '',
-                priority: 0,
-                ...options
-            };
-            
-            console.log('📋 Final notification options:', notificationOptions);
-            
-            // Create the notification
-            await chrome.notifications.create(notificationId, notificationOptions);
-            console.log('✅ Notification created successfully with ID:', notificationId);
-            
-            return notificationId;
-            
-        } catch (error) {
-            console.error('❌ Error creating notification:', error);
-            console.error('❌ Notification error details:', error instanceof Error ? error.stack : 'No stack trace');
-            throw error;
-        }
     }
 }
 

@@ -922,18 +922,16 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
       });
       
       console.log('Break reminder set for every', intervalMinutes, 'minutes');
-      // Save reminder settings
-      await chrome.storage.local.set({
-        eyezen_reminder: {
-          isActive: true,
-          interval: intervalMinutes,
-          setAt: Date.now()
-        }
+      
+      // Update user settings through ChromeStorageService to match what background service worker reads
+      await ChromeStorageService.updateSettings({
+        reminderInterval: intervalMinutes,
+        reminderEnabled: true
       });
-      console.log('Reminder settings saved:', {
-        isActive: true,
-        interval: intervalMinutes,
-        setAt: Date.now()
+      
+      console.log('Reminder settings saved to user data:', {
+        reminderInterval: intervalMinutes,
+        reminderEnabled: true
       });
       
       setState(prev => ({

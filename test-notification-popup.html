@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Notification Popup</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            margin: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .error { background: rgba(255, 0, 0, 0.3); }
+        .success { background: rgba(0, 255, 0, 0.3); }
+        .warning { background: rgba(255, 165, 0, 0.3); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 EyeZen Notification Test</h1>
+        <p>This page will help you test and troubleshoot Chrome notifications for your EyeZen extension.</p>
+        
+        <div id="status" class="status">
+            <strong>Status:</strong> Ready to test notifications
+        </div>
+        
+        <h3>🧪 Test Actions:</h3>
+        <button onclick="checkPermissions()">1. Check Notification Permissions</button>
+        <button onclick="requestPermissions()">2. Request Notification Permissions</button>
+        <button onclick="testBasicNotification()">3. Test Basic Notification</button>
+        <button onclick="testExtensionNotification()">4. Test Extension Notification</button>
+        <button onclick="checkExtensionStatus()">5. Check Extension Status</button>
+        
+        <h3>📋 Troubleshooting Steps:</h3>
+        <ol>
+            <li><strong>Check Chrome Settings:</strong> Go to chrome://settings/content/notifications</li>
+            <li><strong>Allow Notifications:</strong> Make sure notifications are enabled for this site and your extension</li>
+            <li><strong>Check Extension Permissions:</strong> Go to chrome://extensions and verify notification permissions</li>
+            <li><strong>System Notifications:</strong> Check your OS notification settings (macOS System Preferences > Notifications)</li>
+            <li><strong>Do Not Disturb:</strong> Make sure Do Not Disturb mode is off</li>
+        </ol>
+        
+        <div id="logs" style="margin-top: 20px; font-family: monospace; font-size: 12px; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; max-height: 300px; overflow-y: auto;">
+            <strong>Logs:</strong><br>
+        </div>
+    </div>
+
+    <script>
+        function log(message) {
+            const logs = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            logs.innerHTML += `[${timestamp}] ${message}<br>`;
+            logs.scrollTop = logs.scrollHeight;
+            console.log(message);
+        }
+
+        function updateStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.innerHTML = `<strong>Status:</strong> ${message}`;
+            status.className = `status ${type}`;
+        }
+
+        async function checkPermissions() {
+            log('🔍 Checking notification permissions...');
+            
+            if (!('Notification' in window)) {
+                updateStatus('❌ This browser does not support notifications', 'error');
+                log('❌ Notification API not supported');
+                return;
+            }
+            
+            const permission = Notification.permission;
+            log(`📋 Current permission: ${permission}`);
+            
+            switch (permission) {
+                case 'granted':
+                    updateStatus('✅ Notifications are allowed', 'success');
+                    break;
+                case 'denied':
+                    updateStatus('❌ Notifications are blocked - please enable in browser settings', 'error');
+                    break;
+                case 'default':
+                    updateStatus('⚠️ Notification permission not set - click "Request Permissions"', 'warning');
+                    break;
+            }
+        }
+
+        async function requestPermissions() {
+            log('🔐 Requesting notification permissions...');
+            
+            if (!('Notification' in window)) {
+                updateStatus('❌ This browser does not support notifications', 'error');
+                return;
+            }
+            
+            try {
+                const permission = await Notification.requestPermission();
+                log(`📋 Permission result: ${permission}`);
+                
+                if (permission === 'granted') {
+                    updateStatus('✅ Notification permissions granted!', 'success');
+                } else {
+                    updateStatus('❌ Notification permissions denied', 'error');
+                }
+            } catch (error) {
+                log(`❌ Error requesting permissions: ${error.message}`);
+                updateStatus('❌ Error requesting permissions', 'error');
+            }
+        }
+
+        async function testBasicNotification() {
+            log('🧪 Testing basic web notification...');
+            
+            if (Notification.permission !== 'granted') {
+                updateStatus('❌ Please grant notification permissions first', 'error');
+                return;
+            }
+            
+            try {
+                const notification = new Notification('🧪 Test Notification', {
+                    body: 'This is a test notification from the web page',
+                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="%234CAF50"/><text x="50" y="60" text-anchor="middle" fill="white" font-size="30">✓</text></svg>',
+                    requireInteraction: true
+                });
+                
+                notification.onclick = () => {
+                    log('👆 Basic notification clicked!');
+                    notification.close();
+                };
+                
+                updateStatus('✅ Basic notification sent - check your screen!', 'success');
+                log('✅ Basic notification created successfully');
+            } catch (error) {
+                log(`❌ Error creating basic notification: ${error.message}`);
+                updateStatus('❌ Error creating basic notification', 'error');
+            }
+        }
+
+        async function testExtensionNotification() {
+            log('🔌 Testing extension notification via chrome.notifications...');
+            
+            if (typeof chrome === 'undefined' || !chrome.notifications) {
+                updateStatus('❌ Chrome extension APIs not available', 'error');
+                log('❌ chrome.notifications API not available');
+                return;
+            }
+            
+            try {
+                const notificationId = `test-${Date.now()}`;
+                const options = {
+                    type: 'basic',
+                    iconUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="%23FF5722"/><text x="50" y="60" text-anchor="middle" fill="white" font-size="20">EZ</text></svg>',
+                    title: '🔌 Extension Test Notification',
+                    message: 'This is a test notification from the Chrome extension API',
+                    requireInteraction: true,
+                    buttons: [
+                        { title: '✅ Success' },
+                        { title: '❌ Close' }
+                    ]
+                };
+                
+                chrome.notifications.create(notificationId, options, (id) => {
+                    if (chrome.runtime.lastError) {
+                        log(`❌ Extension notification error: ${chrome.runtime.lastError.message}`);
+                        updateStatus('❌ Extension notification failed', 'error');
+                    } else {
+                        log(`✅ Extension notification created with ID: ${id}`);
+                        updateStatus('✅ Extension notification sent - check your screen!', 'success');
+                    }
+                });
+                
+                // Set up click handlers
+                chrome.notifications.onClicked.addListener((id) => {
+                    if (id === notificationId) {
+                        log('👆 Extension notification clicked!');
+                    }
+                });
+                
+                chrome.notifications.onButtonClicked.addListener((id, buttonIndex) => {
+                    if (id === notificationId) {
+                        log(`👆 Extension notification button ${buttonIndex} clicked!`);
+                        chrome.notifications.clear(id);
+                    }
+                });
+                
+            } catch (error) {
+                log(`❌ Error creating extension notification: ${error.message}`);
+                updateStatus('❌ Error creating extension notification', 'error');
+            }
+        }
+
+        async function checkExtensionStatus() {
+            log('🔌 Checking extension status...');
+            
+            if (typeof chrome === 'undefined') {
+                updateStatus('❌ Chrome extension APIs not available', 'error');
+                log('❌ Chrome APIs not available - not running in extension context');
+                return;
+            }
+            
+            log('✅ Chrome APIs available');
+            
+            // Check specific APIs
+            const apis = [
+                'chrome.notifications',
+                'chrome.storage',
+                'chrome.alarms',
+                'chrome.runtime'
+            ];
+            
+            apis.forEach(api => {
+                const parts = api.split('.');
+                let obj = window;
+                let available = true;
+                
+                for (const part of parts) {
+                    if (obj && obj[part]) {
+                        obj = obj[part];
+                    } else {
+                        available = false;
+                        break;
+                    }
+                }
+                
+                log(`${available ? '✅' : '❌'} ${api}: ${available ? 'Available' : 'Not available'}`);
+            });
+            
+            updateStatus('✅ Extension status check completed - see logs', 'success');
+        }
+
+        // Auto-check permissions on load
+        window.addEventListener('load', () => {
+            log('🚀 Notification test page loaded');
+            checkPermissions();
+        });
+    </script>
+</body>
+</html>

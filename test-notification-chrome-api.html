@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Chrome Notifications API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        .test-section h3 {
+            color: #34495e;
+            margin-top: 0;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 Chrome Notifications API Test</h1>
+        
+        <div class="test-section">
+            <h3>Extension Status</h3>
+            <button onclick="checkExtensionStatus()">Check Extension Status</button>
+            <div id="extensionStatus" class="status info">Click "Check Extension Status" to verify the extension is loaded</div>
+        </div>
+
+        <div class="test-section">
+            <h3>Notification Tests</h3>
+            <button onclick="testBasicNotification()">Test Basic Notification</button>
+            <button onclick="testNotificationWithButtons()">Test Notification with Buttons</button>
+            <button onclick="testHighPriorityNotification()">Test High Priority Notification</button>
+            <button onclick="testBreakReminder()">Test Break Reminder</button>
+            <div id="notificationStatus" class="status info">Click any test button to create notifications</div>
+        </div>
+
+        <div class="test-section">
+            <h3>Service Worker Communication</h3>
+            <button onclick="pingServiceWorker()">Ping Service Worker</button>
+            <button onclick="triggerAlarmTest()">Trigger Test Alarm</button>
+            <div id="serviceWorkerStatus" class="status info">Click buttons to test service worker communication</div>
+        </div>
+
+        <div class="test-section">
+            <h3>Console Log</h3>
+            <button onclick="clearLog()">Clear Log</button>
+            <div id="consoleLog" class="log">Test logs will appear here...</div>
+        </div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logElement = document.getElementById('consoleLog');
+            const logEntry = document.createElement('div');
+            logEntry.style.color = type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#6c757d';
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logElement.appendChild(logEntry);
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function updateStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `status ${type}`;
+        }
+
+        async function checkExtensionStatus() {
+            try {
+                log('Checking extension status...');
+                
+                if (!chrome || !chrome.runtime) {
+                    throw new Error('Chrome extension APIs not available');
+                }
+
+                const response = await chrome.runtime.sendMessage({ type: 'HEALTH_CHECK' });
+                log(`Extension health check response: ${JSON.stringify(response)}`, 'success');
+                updateStatus('extensionStatus', `Extension is ${response.initialized ? 'initialized' : 'not initialized'} and healthy`, 'success');
+                
+            } catch (error) {
+                log(`Extension status check failed: ${error.message}`, 'error');
+                updateStatus('extensionStatus', `Extension error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testBasicNotification() {
+            try {
+                log('Testing basic notification...');
+                
+                const notificationId = await chrome.notifications.create({
+                    type: 'basic',
+                    iconUrl: 'assets/icons/icon-128.png',
+                    title: 'Test Basic Notification',
+                    message: 'This is a basic notification test from the Chrome Extensions API.'
+                });
+                
+                log(`Basic notification created with ID: ${notificationId}`, 'success');
+                updateStatus('notificationStatus', 'Basic notification created successfully', 'success');
+                
+            } catch (error) {
+                log(`Basic notification test failed: ${error.message}`, 'error');
+                updateStatus('notificationStatus', `Notification error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testNotificationWithButtons() {
+            try {
+                log('Testing notification with buttons...');
+                
+                const notificationId = await chrome.notifications.create({
+                    type: 'basic',
+                    iconUrl: 'assets/icons/icon-128.png',
+                    title: 'Test Notification with Buttons',
+                    message: 'This notification has action buttons. Try clicking them!',
+                    buttons: [
+                        { title: 'Action 1' },
+                        { title: 'Action 2' }
+                    ],
+                    priority: 1
+                });
+                
+                log(`Notification with buttons created with ID: ${notificationId}`, 'success');
+                updateStatus('notificationStatus', 'Notification with buttons created successfully', 'success');
+                
+            } catch (error) {
+                log(`Notification with buttons test failed: ${error.message}`, 'error');
+                updateStatus('notificationStatus', `Notification error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testHighPriorityNotification() {
+            try {
+                log('Testing high priority notification...');
+                
+                const notificationId = await chrome.notifications.create({
+                    type: 'basic',
+                    iconUrl: 'assets/icons/icon-128.png',
+                    title: 'High Priority Notification',
+                    message: 'This is a high priority notification that requires attention.',
+                    priority: 2,
+                    requireInteraction: true
+                });
+                
+                log(`High priority notification created with ID: ${notificationId}`, 'success');
+                updateStatus('notificationStatus', 'High priority notification created successfully', 'success');
+                
+            } catch (error) {
+                log(`High priority notification test failed: ${error.message}`, 'error');
+                updateStatus('notificationStatus', `Notification error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testBreakReminder() {
+            try {
+                log('Testing break reminder notification (simulating service worker call)...');
+                
+                // Simulate the exact notification that would be created by the service worker
+                const notificationId = await chrome.notifications.create({
+                    type: 'basic',
+                    iconUrl: 'assets/icons/icon-128.png',
+                    title: 'EyeZen Break Reminder',
+                    message: 'Time for a break! Your eyes need rest to stay healthy.',
+                    buttons: [
+                        { title: 'Take Break' },
+                        { title: 'Snooze 5min' }
+                    ],
+                    priority: 2
+                });
+                
+                log(`Break reminder notification created with ID: ${notificationId}`, 'success');
+                updateStatus('notificationStatus', 'Break reminder notification created successfully', 'success');
+                
+            } catch (error) {
+                log(`Break reminder test failed: ${error.message}`, 'error');
+                updateStatus('notificationStatus', `Notification error: ${error.message}`, 'error');
+            }
+        }
+
+        async function pingServiceWorker() {
+            try {
+                log('Pinging service worker...');
+                
+                const response = await chrome.runtime.sendMessage({ type: 'PING' });
+                log(`Service worker ping response: ${JSON.stringify(response)}`, 'success');
+                updateStatus('serviceWorkerStatus', 'Service worker is responding', 'success');
+                
+            } catch (error) {
+                log(`Service worker ping failed: ${error.message}`, 'error');
+                updateStatus('serviceWorkerStatus', `Service worker error: ${error.message}`, 'error');
+            }
+        }
+
+        async function triggerAlarmTest() {
+            try {
+                log('Checking current alarms...');
+                
+                const alarms = await chrome.alarms.getAll();
+                log(`Current alarms: ${JSON.stringify(alarms.map(a => ({ name: a.name, scheduledTime: new Date(a.scheduledTime).toLocaleString() })))}`, 'info');
+                
+                if (alarms.length > 0) {
+                    updateStatus('serviceWorkerStatus', `Found ${alarms.length} active alarms`, 'success');
+                } else {
+                    updateStatus('serviceWorkerStatus', 'No active alarms found', 'info');
+                }
+                
+            } catch (error) {
+                log(`Alarm check failed: ${error.message}`, 'error');
+                updateStatus('serviceWorkerStatus', `Alarm error: ${error.message}`, 'error');
+            }
+        }
+
+        function clearLog() {
+            document.getElementById('consoleLog').innerHTML = 'Test logs will appear here...';
+        }
+
+        // Listen for notification events
+        if (chrome && chrome.notifications) {
+            chrome.notifications.onClicked.addListener((notificationId) => {
+                log(`Notification clicked: ${notificationId}`, 'info');
+            });
+
+            chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
+                log(`Notification button clicked: ${notificationId}, button ${buttonIndex}`, 'info');
+            });
+
+            chrome.notifications.onClosed.addListener((notificationId, byUser) => {
+                log(`Notification closed: ${notificationId}, by user: ${byUser}`, 'info');
+            });
+        }
+
+        // Auto-check extension status on page load
+        window.addEventListener('load', () => {
+            log('Page loaded, checking extension status...', 'info');
+            setTimeout(checkExtensionStatus, 500);
+        });
+    </script>
+</body>
+</html>

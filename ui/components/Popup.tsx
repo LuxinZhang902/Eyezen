@@ -13,6 +13,7 @@ const CameraPermissionPopup = lazy(() => import('./CameraPermissionPopup'));
 const LoginModal = lazy(() => import('./LoginModal'));
 const BreakDetailModal = lazy(() => import('./BreakDetailModal'));
 const ReminderModal = lazy(() => import('./ReminderModal'));
+const ColorAdjustModal = lazy(() => import('./ColorAdjustModal'));
 
 // Lazy load heavy services
 const loadAIServices = () => Promise.all([
@@ -52,6 +53,7 @@ interface PopupState {
   showReminderModal: boolean;
   reminderInterval: number;
   isReminderActive: boolean;
+  showColorAdjustModal: boolean;
 }
 
 
@@ -84,7 +86,8 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     selectedBreakType: null,
     showReminderModal: false,
     reminderInterval: 30, // Default to 30 minutes
-    isReminderActive: false
+    isReminderActive: false,
+    showColorAdjustModal: false
   });
 
   useEffect(() => {
@@ -1161,6 +1164,19 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
                 <div className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full"></div>
               )}
             </button>
+
+            {/* Adjust Screen Color */}
+            <button
+              onClick={() => setState(prev => ({ ...prev, showColorAdjustModal: true }))}
+              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              title="Adjust Screen Color"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <circle cx="12" cy="12" r="9" strokeWidth="2" />
+                <path d="M7 12h10" strokeWidth="2" />
+                <path d="M12 7v10" strokeWidth="2" />
+              </svg>
+            </button>
             
             {state.isLoggedIn ? (
               <div className="flex items-center space-x-2">
@@ -1387,6 +1403,58 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
           onClearReminder={handleClearReminder}
           isReminderActive={state.isReminderActive}
           currentInterval={state.reminderInterval}
+        />
+      </Suspense>
+
+      {/* Color Adjust Modal */}
+      <Suspense fallback={<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div></div>}>
+        <ColorAdjustModal
+          isVisible={state.showColorAdjustModal}
+          onClose={() => setState(prev => ({ ...prev, showColorAdjustModal: false }))}
+          onApply={async (settings) => {
+            try {
+              await chrome.storage.local.set({ eyezen_color_settings: settings });
+              // Apply overlay to the active tab using chrome.scripting
+              const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+              const tab = tabs && tabs[0];
+              if (tab?.id && chrome.scripting) {
+                await chrome.scripting.executeScript({
+                  target: { tabId: tab.id },
+                  func: (s) => {
+                    const hexToRgb = (hex: string) => {
+                      const h = hex.replace('#', '');
+                      const r = parseInt(h.substring(0, 2), 16);
+                      const g = parseInt(h.substring(2, 4), 16);
+                      const b = parseInt(h.substring(4, 6), 16);
+                      return { r, g, b };
+                    };
+                    const id = 'eyezen-color-overlay';
+                    let overlay = document.getElementById(id);
+                    if (!overlay) {
+                      overlay = document.createElement('div');
+                      overlay.id = id;
+                      overlay.style.position = 'fixed';
+                      overlay.style.top = '0';
+                      overlay.style.left = '0';
+                      overlay.style.width = '100vw';
+                      overlay.style.height = '100vh';
+                      overlay.style.pointerEvents = 'none';
+                      overlay.style.zIndex = '2147483647';
+                      overlay.style.mixBlendMode = 'multiply';
+                      document.documentElement.appendChild(overlay);
+                    }
+                    const { r, g, b } = hexToRgb(s.color || '#FFB74D');
+                    overlay.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${s.tintOpacity ?? 0.25})`;
+                    // Apply brightness to the whole page
+                    const brightness = typeof s.brightness === 'number' ? s.brightness : 1;
+                    document.documentElement.style.filter = `brightness(${brightness})`;
+                  },
+                  args: [settings]
+                });
+              }
+            } catch (_) {}
+            setState(prev => ({ ...prev, showColorAdjustModal: false }));
+          }}
         />
       </Suspense>
 

@@ -250,31 +250,42 @@ class BackgroundService {
         try {
             console.log("⏰ Setting up default alarms...");
             
-            const BREAK_INTERVAL = 0.5; // 30 seconds for testing
-            const POSTURE_INTERVAL = 30; // 30 minutes
-            const DAILY_INTERVAL = 1440; // 24 hours
+            // Read user-configured reminder settings; do not default to any interval
+            let reminderEnabled = false;
+            let reminderInterval = null;
+            try {
+                const stored = await chrome.storage.local.get(["userData"]);
+                const userData = stored && stored.userData ? stored.userData : null;
+                reminderEnabled = !!(userData && userData.settings && userData.settings.reminderEnabled === true);
+                reminderInterval = (userData && userData.settings && typeof userData.settings.reminderInterval === "number")
+                    ? userData.settings.reminderInterval
+                    : null;
+                console.log("⚙️ Reminder settings fetched:", { reminderEnabled, reminderInterval });
+            } catch (e) {
+                console.warn("⚠️ Failed to read reminder settings; will not create break alarm.", e);
+            }
+
+            // Posture and daily summary alarms disabled
 
             // Clear existing alarms
             await chrome.alarms.clear("break-reminder");
-            await chrome.alarms.create("break-reminder", {
-                delayInMinutes: BREAK_INTERVAL,
-                periodInMinutes: BREAK_INTERVAL
-            });
-            console.log(`✅ Break reminder alarm set for every ${BREAK_INTERVAL} minutes`);
+            if (reminderEnabled && typeof reminderInterval === "number" && reminderInterval > 0) {
+                // Enforce Chrome's minimum interval of 0.5 minutes (30 seconds)
+                const BREAK_INTERVAL = Math.max(0.5, reminderInterval);
+                await chrome.alarms.create("break-reminder", {
+                    delayInMinutes: BREAK_INTERVAL,
+                    periodInMinutes: BREAK_INTERVAL
+                });
+                console.log(`✅ Break reminder alarm set for every ${BREAK_INTERVAL} minutes (configured: ${reminderInterval})`);
+            } else {
+                console.log("ℹ️ Break reminder not enabled or interval not set; skipping alarm creation.");
+            }
 
             await chrome.alarms.clear("posture-check");
-            await chrome.alarms.create("posture-check", {
-                delayInMinutes: POSTURE_INTERVAL,
-                periodInMinutes: POSTURE_INTERVAL
-            });
-            console.log(`✅ Posture check alarm set for every ${POSTURE_INTERVAL} minutes`);
+            console.log("ℹ️ Posture check alarm disabled; cleared any existing alarm.");
 
             await chrome.alarms.clear("daily-summary");
-            await chrome.alarms.create("daily-summary", {
-                delayInMinutes: DAILY_INTERVAL,
-                periodInMinutes: DAILY_INTERVAL
-            });
-            console.log(`✅ Daily summary alarm set for every ${DAILY_INTERVAL} minutes`);
+            console.log("ℹ️ Daily summary alarm disabled; cleared any existing alarm.");
 
             const alarms = await chrome.alarms.getAll();
             console.log("📋 All active alarms after setup:", alarms.map(alarm => ({

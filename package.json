@@ -5,7 +5,10 @@
   "main": "index.js",
   "scripts": {
     "build": "webpack --mode=production",
+    "build:smart": "node scripts/smart-build.js",
     "dev": "webpack --mode=development --watch",
+    "build:no-bg": "SKIP_BG=1 webpack --mode=production",
+    "dev:no-bg": "SKIP_BG=1 webpack --mode=development --watch",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write \"**/*.{ts,tsx,json,css,md}\""

@@ -5,19 +5,26 @@ const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 module.exports = (env, argv) => {
   const isProduction = argv.mode === 'production';
-  
+  const skipBackground = process.env.SKIP_BG === '1' || env?.skipBackground === true || env?.skipBackground === 'true';
+
+  // Build entry object conditionally to allow freezing background.js when desired
+  const entry = {
+    popup: './ui/popup.tsx',
+    options: './ui/options.tsx',
+    break: './ui/break.tsx',
+    'cv-worker': './core/cv-worker/worker.ts'
+  };
+  if (!skipBackground) {
+    entry.background = './background/service-worker.ts';
+  }
+
   return {
-    entry: {
-      popup: './ui/popup.tsx',
-      options: './ui/options.tsx',
-      break: './ui/break.tsx',
-      background: './background/service-worker.ts',
-      'cv-worker': './core/cv-worker/worker.ts'
-    },
+    entry,
     output: {
       path: path.resolve(__dirname, 'dist'),
       filename: '[name].js',
-      clean: true,
+      // When skipping background, do not clean the dist folder to preserve existing background.js
+      clean: skipBackground ? false : true,
       strictModuleExceptionHandling: false
     },
     module: {

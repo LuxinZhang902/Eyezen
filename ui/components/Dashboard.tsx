@@ -51,6 +51,8 @@ interface DashboardState {
   // Settings states
   tempReminderInterval: number | null;
   isSaving: boolean;
+  // UI theme state
+  isDarkMode: boolean;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExportData, onEraseData }) => {
@@ -77,7 +79,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
     userDashboardData: null,
     // Settings initial states
     tempReminderInterval: null,
-    isSaving: false
+    isSaving: false,
+    // UI theme initial state
+    isDarkMode: false
   });
 
   // Safe setState that checks if component is still mounted
@@ -90,6 +94,36 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
   useEffect(() => {
     loadDashboardData();
   }, []);
+  
+  // Load theme preference and apply on mount
+  useEffect(() => {
+    try {
+      chrome.storage?.local.get(['uiTheme'], (result: { uiTheme?: 'light' | 'dark' }) => {
+        const mode = result?.uiTheme || 'light';
+        try {
+          document.body.classList.remove('theme-eyezen', 'theme-eyezen-light');
+          document.body.classList.add(mode === 'dark' ? 'theme-eyezen' : 'theme-eyezen-light');
+        } catch (e) {}
+        setState(prev => ({ ...prev, isDarkMode: mode === 'dark' }));
+      });
+    } catch (e) {}
+  }, []);
+  
+  const applyThemeClass = (mode: 'light' | 'dark') => {
+    try {
+      document.body.classList.remove('theme-eyezen', 'theme-eyezen-light');
+      document.body.classList.add(mode === 'dark' ? 'theme-eyezen' : 'theme-eyezen-light');
+    } catch (e) {}
+  };
+  
+  const toggleTheme = () => {
+    const newMode: 'light' | 'dark' = state.isDarkMode ? 'light' : 'dark';
+    setState(prev => ({ ...prev, isDarkMode: !prev.isDarkMode }));
+    applyThemeClass(newMode);
+    try {
+      chrome.storage?.local.set({ uiTheme: newMode });
+    } catch (e) {}
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -1268,26 +1302,26 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
 
   if (state.isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
+      <div className={`min-h-screen ${state.isDarkMode ? 'bg-[#0b1220] text-[#e6edf7]' : 'bg-white text-gray-900'} flex items-center justify-center`}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading dashboard...</p>
+          <p className={`${state.isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Loading dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 relative overflow-hidden">
+    <div className={`min-h-screen ${state.isDarkMode ? 'bg-[#0b1220] text-[#e6edf7]' : 'bg-white text-gray-900'} relative overflow-hidden`}>
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-200/30 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-200/30 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl animate-pulse delay-500"></div>
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-emerald-300/20 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-amber-200/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-teal-300/15 rounded-full blur-3xl animate-pulse delay-500"></div>
       </div>
 
       {/* Enhanced Header */}
-      <div className="relative z-10 bg-gradient-to-r from-slate-800/95 via-indigo-900/95 to-purple-900/95 backdrop-blur-xl border-b border-white/10 shadow-2xl">
+      <div className={`relative z-10 ${state.isDarkMode ? 'eyezen-header backdrop-blur-xl border-b border-white/10 shadow-2xl' : 'bg-white/60 backdrop-blur-xl border-b border-gray-200 shadow-lg'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
             <div className="flex items-center space-x-6">
@@ -1298,12 +1332,19 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
                 </svg>
               </div>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-white via-blue-100 to-indigo-200 bg-clip-text text-transparent">👁️ EyeZen Dashboard</h1>
+                <h1 className="text-2xl font-bold gradient-text">👁️ EyeZen Dashboard</h1>
                 <p className="text-blue-200/80 text-sm font-medium">Advanced Digital Eye Health Analytics</p>
               </div>
             </div>
             
             <div className="flex items-center space-x-4">
+              <button
+                onClick={toggleTheme}
+                title={state.isDarkMode ? 'Switch to Morning Mode' : 'Switch to Night Mode'}
+                className={`${state.isDarkMode ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'} px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200`}
+              >
+                {state.isDarkMode ? '🌙 Night' : '☀️ Morning'}
+              </button>
               {state.isLoggedIn ? (
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center space-x-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2">

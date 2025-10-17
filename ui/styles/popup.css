@@ -91,6 +91,53 @@ body.options-page {
   }
 }
 
+/* ===== Unified EyeZen Theme (Dark + Accents) ===== */
+:root {
+  --eyezen-bg: #0b1220;
+  --eyezen-panel: #0f172a;
+  --eyezen-text: #e6edf7;
+  --eyezen-muted: #9fb0c7;
+  --eyezen-primary: #10b981; /* emerald */
+  --eyezen-primary-600: #059669;
+  --eyezen-accent: #f59e0b; /* amber */
+  --eyezen-border: #1f2937;
+}
+
+.theme-eyezen {
+  color-scheme: dark;
+  background: var(--eyezen-bg) !important;
+  color: var(--eyezen-text);
+}
+
+/* Popup root and options root use panels */
+.theme-eyezen #popup-root { background: var(--eyezen-panel) !important; color: var(--eyezen-text); box-shadow: 0 20px 40px rgba(0,0,0,0.35); border: 1px solid var(--eyezen-border); }
+.theme-eyezen #options-root { background: var(--eyezen-bg) !important; }
+
+/* Override common light backgrounds in existing components */
+.theme-eyezen .bg-white { background-color: var(--eyezen-panel) !important; }
+.theme-eyezen [class*="bg-white/"] { background-color: var(--eyezen-panel) !important; }
+.theme-eyezen .bg-gray-50, .theme-eyezen .bg-gray-100, .theme-eyezen .bg-gray-200 { background-color: var(--eyezen-panel) !important; }
+.theme-eyezen .border-white, .theme-eyezen [class*="border-white/"] { border-color: var(--eyezen-border) !important; }
+.theme-eyezen .border-gray-200, .theme-eyezen .border-gray-300 { border-color: var(--eyezen-border) !important; }
+.theme-eyezen .text-gray-800, .theme-eyezen .text-gray-700, .theme-eyezen .text-gray-600 { color: var(--eyezen-text) !important; }
+.theme-eyezen .text-blue-600, .theme-eyezen .text-indigo-800, .theme-eyezen .text-emerald-800 { color: var(--eyezen-muted) !important; }
+.theme-eyezen .muted { color: var(--eyezen-muted) !important; }
+
+/* Gradient header and glow ring utility */
+.eyezen-header { background: linear-gradient(90deg, #0f5132, #14532d, #065f46); color: #eafff6; }
+.gradient-text { background: linear-gradient(90deg, var(--eyezen-accent), #ffd16a, var(--eyezen-primary)); -webkit-background-clip: text; background-clip: text; color: transparent; animation: eyezenGradient 8s ease-in-out infinite; }
+@keyframes eyezenGradient { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+
+/* Button shine */
+.btn-shine { position: relative; overflow: hidden; }
+.btn-shine::before { content:""; position:absolute; top:0; left:-40%; width:40%; height:100%; background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.25), rgba(255,255,255,0)); transform: skewX(-20deg); transition: left .4s ease; }
+.btn-shine:hover::before { left:110%; }
+
+/* Card hover lift */
+.card-lift { transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
+.card-lift:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 12px 24px rgba(0,0,0,0.35); border-color: var(--eyezen-accent) !important; }
+
+
 @media (min-width: 641px) and (max-width: 1024px) {
   .text-responsive-xl {
     font-size: 1.5rem;

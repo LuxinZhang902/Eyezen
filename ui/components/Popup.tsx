@@ -54,6 +54,8 @@ interface PopupState {
   reminderInterval: number;
   isReminderActive: boolean;
   showColorAdjustModal: boolean;
+  // theme
+  isDarkMode: boolean;
 }
 
 
@@ -87,9 +89,40 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
     showReminderModal: false,
     reminderInterval: 30, // Default to 30 minutes
     isReminderActive: false,
-    showColorAdjustModal: false
+    showColorAdjustModal: false,
+    isDarkMode: false
   });
-
+  
+  // Load theme preference and apply on mount
+  useEffect(() => {
+    try {
+      chrome.storage?.local.get(['uiTheme'], (result: { uiTheme?: 'light' | 'dark' }) => {
+        const mode = result?.uiTheme || 'light';
+        try {
+          document.body.classList.remove('theme-eyezen', 'theme-eyezen-light');
+          document.body.classList.add(mode === 'dark' ? 'theme-eyezen' : 'theme-eyezen-light');
+        } catch (e) {}
+        setState(prev => ({ ...prev, isDarkMode: mode === 'dark' }));
+      });
+    } catch (e) {}
+  }, []);
+  
+  const applyThemeClass = (mode: 'light' | 'dark') => {
+    try {
+      document.body.classList.remove('theme-eyezen', 'theme-eyezen-light');
+      document.body.classList.add(mode === 'dark' ? 'theme-eyezen' : 'theme-eyezen-light');
+    } catch (e) {}
+  };
+  
+  const toggleTheme = () => {
+    const newMode: 'light' | 'dark' = state.isDarkMode ? 'light' : 'dark';
+    setState(prev => ({ ...prev, isDarkMode: !prev.isDarkMode }));
+    applyThemeClass(newMode);
+    try {
+      chrome.storage?.local.set({ uiTheme: newMode });
+    } catch (e) {}
+  };
+  
   useEffect(() => {
     console.log('🔥 POPUP: useEffect triggered, calling loadUserData');
     loadUserData();
@@ -1136,15 +1169,15 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
           onSignup={handleSignup}
         />
       </Suspense>
-      <div className="w-[380px] h-[650px] bg-white flex flex-col relative">
+      <div className={`w-[380px] h-[650px] ${state.isDarkMode ? 'bg-[#0b1220] text-[#e6edf7]' : 'bg-white text-gray-900'} flex flex-col relative`}>
       {/* Header */}
-      <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4">
+      <div className={`${state.isDarkMode ? 'eyezen-header text-white p-4' : 'bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4'}`}>
         
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-3">
             <div className="text-2xl">👁️</div>
             <div>
-              <h1 className="text-lg font-bold">EyeZen</h1>
+              <h1 className="text-lg font-bold gradient-text">EyeZen</h1>
               <p className="text-blue-100 text-xs opacity-90">Eye Health Monitor</p>
             </div>
           </div>
@@ -1177,36 +1210,24 @@ Chrome extension popups close when permission dialogs appear, preventing you fro
                 <path d="M12 7v10" strokeWidth="2" />
               </svg>
             </button>
-            
-            {state.isLoggedIn ? (
-              <div className="flex items-center space-x-2">
-                <span className="text-xs text-blue-100 opacity-90 truncate max-w-20">
-                  {state.userEmail.split('@')[0]}
-                </span>
-                <button
-                  onClick={async () => {
-                    await chrome.storage.local.remove(['eyezen_login_state']);
-                    setState(prev => ({ ...prev, isLoggedIn: false, userEmail: '' }));
-                  }}
-                  className="p-1 hover:bg-white/20 rounded transition-colors"
-                  title="Logout"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setState(prev => ({ ...prev, showLoginModal: true }))}
-                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-                title="Login"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+
+            {/* Night/Morning Mode Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              title={state.isDarkMode ? 'Switch to Morning Mode' : 'Switch to Night Mode'}
+            >
+              {state.isDarkMode ? (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <circle cx="12" cy="12" r="3" strokeWidth="2" />
+                  <path d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12" strokeWidth="2" />
                 </svg>
-              </button>
-            )}
+              ) : (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+                </svg>
+              )}
+            </button>
           </div>
         </div>
         

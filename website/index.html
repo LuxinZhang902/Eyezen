@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EyeZen — Protect Your Eyes While You Work</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <span class="brand-icon">👁️</span>
+        <span class="brand-name gradient-text">EyeZen</span>
+      </div>
+      <nav class="nav">
+        <a href="#features">Features</a>
+        <a href="#demo">Live Demo</a>
+        <a href="#install">Install</a>
+        <a href="#privacy">Privacy</a>
+      </nav>
+      <button id="installBtn" class="btn primary">Add to Chrome</button>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="orbs" aria-hidden="true">
+      <div class="orb orb1"></div>
+      <div class="orb orb2"></div>
+      <div class="orb orb3"></div>
+    </div>
+    <div class="container hero-inner">
+      <div class="hero-copy">
+        <h1 class="gradient-text">Protect your eyes, boost your focus</h1>
+        <p>EyeZen is an AI eye-health assistant for Chrome. It detects fatigue, reminds you to take breaks, and offers gentle screen color adjustments that are easier on your eyes.</p>
+        <div class="hero-ctas">
+          <button class="btn primary" id="heroInstall">Add to Chrome</button>
+          <a class="btn ghost" href="#demo">Try Live Demo</a>
+          <button class="btn ghost" id="ambientToggle">Ambient Mode</button>
+        </div>
+        <div class="hero-meta">
+          <span>• Free to use</span>
+          <span>• Works on macOS/Windows</span>
+          <span>• Privacy-first</span>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="mock-window" id="tiltWindow">
+          <div class="mock-toolbar">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <div class="title">EyeZen — Popup Preview</div>
+          </div>
+          <div class="mock-content" id="mockContent">
+            <h3>Eye Health Score</h3>
+            <p class="muted">Real-time fatigue and posture insights</p>
+            <div class="score-bar"><span style="width: 65%"></span></div>
+            <div class="cards">
+              <div class="card">
+                <div class="card-icon">🧠</div>
+                <div class="card-title">AI Fatigue Detection</div>
+                <div class="card-desc">Understands eye strain patterns and work rhythm.</div>
+              </div>
+              <div class="card">
+                <div class="card-icon">⏰</div>
+                <div class="card-title">Break Reminders</div>
+                <div class="card-desc">Configurable intervals with gentle nudges.</div>
+              </div>
+              <div class="card">
+                <div class="card-icon">🎨</div>
+                <div class="card-title">Protective Screen Color</div>
+                <div class="card-desc">Warm amber tint and brightness tuning.</div>
+              </div>
+            </div>
+          </div>
+          <div id="heroOverlay" class="overlay"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="features">
+    <div class="container">
+      <h2>What EyeZen does for you</h2>
+      <div class="feature-grid">
+        <div class="feature-item">
+          <div class="fi-icon">🤖</div>
+          <h3>AI insights</h3>
+          <p>Analyzes camera signals locally to estimate fatigue, posture, and eye strain — without sending video off your device.</p>
+        </div>
+        <div class="feature-item">
+          <div class="fi-icon">🛎️</div>
+          <h3>Healthy breaks</h3>
+          <p>Smart break reminders with mini-rituals that reduce tension and protect vision.</p>
+        </div>
+        <div class="feature-item">
+          <div class="fi-icon">🎨</div>
+          <h3>Gentle tint</h3>
+          <p>Subtle warm overlay and brightness tuning that’s easier on your eyes during long sessions.</p>
+        </div>
+        <div class="feature-item">
+          <div class="fi-icon">🔒</div>
+          <h3>Privacy-first</h3>
+          <p>Runs on-device. You control what’s stored. No tracking or ads.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="demo" class="demo">
+    <div class="container">
+      <h2>Live Demo: adjust screen color</h2>
+      <p class="muted">Try EyeZen’s protective color idea right on this page.</p>
+      <div class="demo-controls">
+        <label>Brightness
+          <input id="brightness" type="range" min="0.6" max="1.4" step="0.05" value="1" />
+        </label>
+        <label>Tint Strength
+          <input id="tint" type="range" min="0" max="0.6" step="0.05" value="0.25" />
+        </label>
+        <div class="tints">
+          <button data-color="#FFB74D" class="tint active">Warm Amber</button>
+          <button data-color="#A5D6A7" class="tint">Soft Green</button>
+          <button data-color="#F5E0B3" class="tint">Sepia</button>
+          <button data-color="#ECEFF1" class="tint">Cool Gray</button>
+        </div>
+      </div>
+      <div class="demo-stage">
+        <div class="demo-content">
+          <h3>Sample content</h3>
+          <p>Reading-friendly area to feel the effect. EyeZen applies a gentle multiply tint and brightness adjustment.</p>
+        </div>
+        <div id="demoOverlay" class="overlay"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install" class="install">
+    <div class="container install-inner">
+      <div class="install-copy">
+        <h2>Install EyeZen</h2>
+        <p>Add EyeZen to Chrome to enable AI fatigue detection, break reminders, and the protective color overlay on any site.</p>
+        <div class="install-actions">
+          <a id="webstoreLink" class="btn primary" href="#" target="_blank">Add to Chrome</a>
+          <button id="openGuide" class="btn">Developer install guide</button>
+        </div>
+        <p class="muted small">If the Web Store link isn’t available yet, use the developer guide.</p>
+      </div>
+      <div class="install-art">🧩</div>
+    </div>
+  </section>
+
+  <section id="privacy" class="privacy">
+    <div class="container">
+      <h2>Privacy & permissions</h2>
+      <ul class="privacy-list">
+        <li><strong>On-device analysis</strong> — vision processing runs locally in Chrome.</li>
+        <li><strong>Storage</strong> — saves lightweight settings like reminder interval and color preferences.</li>
+        <li><strong>Notifications & alarms</strong> — to remind you about healthy breaks.</li>
+        <li><strong>Camera permission</strong> — optional and user-controlled; used only to estimate eye fatigue.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="brand">
+        <span class="brand-icon">👁️</span>
+        <span class="brand-name">EyeZen</span>
+      </div>
+      <div class="foot-links">
+        <a href="#install">Install</a>
+        <a href="#privacy">Privacy</a>
+        <a href="https://github.com/eyezen/chrome-extension" target="_blank">GitHub</a>
+      </div>
+      <div class="copyright">© 2025 EyeZen Team</div>
+    </div>
+  </footer>
+
+  <!-- Install guide modal -->
+  <div id="guideModal" class="modal hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Developer install (unpacked)</h3>
+        <button id="closeGuide" class="icon-btn">✖</button>
+      </div>
+      <div class="modal-body">
+        <ol>
+          <li>Clone or download the EyeZen repo.</li>
+          <li>Run <code>npm install</code> and <code>npm run build</code> (or <code>npm run build:no-bg</code>).</li>
+          <li>Open <code>chrome://extensions</code> in Chrome.</li>
+          <li>Enable <strong>Developer mode</strong>.</li>
+          <li>Click <strong>Load unpacked</strong> and select the <code>dist/</code> folder.</li>
+          <li>Pin EyeZen to your toolbar and open the popup.</li>
+        </ol>
+        <p class="muted small">Tip: After saving color settings, EyeZen injects a gentle tint to the current tab using scripting permissions.</p>
+      </div>
+      <div class="modal-actions">
+        <button id="openExtensions" class="btn">Open chrome://extensions</button>
+        <button id="closeGuide2" class="btn primary">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

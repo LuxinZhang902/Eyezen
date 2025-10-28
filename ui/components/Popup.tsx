@@ -192,11 +192,23 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
       (window as any).storagePollingInterval = storagePollingInterval;
      }
      
-     // Listen for storage changes to sync authentication state
+     // Listen for storage changes to sync authentication state and camera state
      const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
-       if (areaName === 'local' && changes.eyezen_login_state) {
-         console.log('Popup: Login state changed in storage:', changes.eyezen_login_state);
-         loadLoginState();
+       if (areaName === 'local') {
+         if (changes.eyezen_login_state) {
+           console.log('Popup: Login state changed in storage:', changes.eyezen_login_state);
+           loadLoginState();
+         }
+         if (changes.eyezen_user_data && changes.eyezen_user_data.newValue) {
+           const newUserData = changes.eyezen_user_data.newValue;
+           const newCameraEnabled = newUserData?.settings?.cameraEnabled;
+           if (typeof newCameraEnabled === 'boolean' && newCameraEnabled !== state.cameraEnabled) {
+             setState(prev => ({
+               ...prev,
+               cameraEnabled: newCameraEnabled
+             }));
+           }
+         }
        }
      };
      
@@ -318,6 +330,10 @@ const Popup: React.FC<PopupProps> = ({ onStartBreak, onOpenSettings }: PopupProp
           showLoginModal: false
           // Preserve existing login state (isLoggedIn, userEmail)
         }));
+        // Validate and sync with offscreen camera state once after loading settings
+        if (userData.settings.cameraEnabled) {
+          validateCameraState();
+        }
       }
     } catch (error) {
       console.error('🔥 POPUP: Failed to load user data:', error);

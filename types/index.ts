@@ -287,3 +287,39 @@ export const MASSAGE_POINTS: Record<MassagePointType, MassagePoint> = {
 // Export all types
 // Note: Chrome types will be available via @types/chrome package
 // Additional type exports can be added here as needed
+
+export interface GoalsData {
+  daily: {
+    breaksTarget: number;
+    eyeScoreTarget: number;
+    notes?: string;
+  };
+  weekly: {
+    consistencyTarget: number; // percentage 0-100
+    avgScoreTarget: number; // 0-100
+    notes?: string;
+  };
+  monthly: {
+    improvementTarget: number; // percentage 0-100
+    streakTarget: number; // days
+    notes?: string;
+  };
+}
+
+export const DEFAULT_GOALS: GoalsData = {
+  daily: {
+    breaksTarget: 8,
+    eyeScoreTarget: 80,
+    notes: ''
+  },
+  weekly: {
+    consistencyTarget: 80,
+    avgScoreTarget: 82,
+    notes: ''
+  },
+  monthly: {
+    improvementTarget: 10,
+    streakTarget: 15,
+    notes: ''
+  }
+};

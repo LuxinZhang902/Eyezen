@@ -2,7 +2,7 @@
  * Storage Module
  * Handles data persistence using chrome.storage.local and IndexedDB
  */
-import { UserData, UserSettings, EyeMetrics, BreakSession, UserEvent } from '../../types/index';
+import { UserData, UserSettings, EyeMetrics, BreakSession, UserEvent, GoalsData } from '../../types/index';
 /**
  * Chrome Storage Service
  * Handles chrome.storage.local operations
@@ -76,6 +76,14 @@ export declare class ChromeStorageService {
      * Import data from backup
      */
     static importData(jsonData: string): Promise<void>;
+    /**
+     * Get user goals
+     */
+    static getGoals(): Promise<GoalsData>;
+    /**
+     * Update user goals
+     */
+    static updateGoals(newGoals: Partial<GoalsData>): Promise<void>;
 }
 /**
  * IndexedDB Service

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DashboardProps, UserData, UserSettings, EyeMetrics, BreakSession, WeeklySummary } from '../../types/index';
+import { DashboardProps, UserData, UserSettings, EyeMetrics, BreakSession, WeeklySummary, GoalsData, DEFAULT_GOALS } from '../../types/index';
 import { ChromeStorageService } from '../../core/storage/index';
 import { sendTestNotification } from '../../core/utils/service-worker-communication';
 import LoginModal from './LoginModal';
@@ -53,6 +53,12 @@ interface DashboardState {
   isSaving: boolean;
   // UI theme state
   isDarkMode: boolean;
+  // Goals & Analytics
+  goals: GoalsData;
+  goalsLoading: boolean;
+  goalPrompts: { daily: string; weekly: string; monthly: string };
+  chartRange: 'day' | 'week' | 'month';
+  trendData: { label: string; value: number }[];
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExportData, onEraseData }) => {
@@ -81,7 +87,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
     tempReminderInterval: null,
     isSaving: false,
     // UI theme initial state
-    isDarkMode: false
+    isDarkMode: false,
+    // Goals & Analytics
+    goals: DEFAULT_GOALS,
+    goalsLoading: true,
+    goalPrompts: { daily: '', weekly: '', monthly: '' },
+    chartRange: 'week',
+    trendData: []
   });
 
   // Safe setState that checks if component is still mounted
@@ -312,6 +324,167 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
     
     const targetBreaks = userData.settings?.dailyBreakGoal || 8;
     return Math.min((todayBreaks.length / targetBreaks) * 100, 100);
+  };
+
+  // === Goals: Load & Save ===
+  const loadGoals = async () => {
+    try {
+      const goals = await ChromeStorageService.getGoals();
+      const prompts = generateGoalPrompts(goals);
+      safeSetState(prev => ({ ...prev, goals, goalsLoading: false, goalPrompts: prompts }));
+    } catch (e) {
+      safeSetState(prev => ({ ...prev, goalsLoading: false }));
+    }
+  };
+
+  useEffect(() => {
+    loadGoals();
+    computeTrend('week');
+  }, []);
+
+  const handleGoalChange = (
+    scope: 'daily' | 'weekly' | 'monthly',
+    key: string,
+    value: number | string
+  ) => {
+    safeSetState(prev => ({
+      ...prev,
+      goals: { ...prev.goals, [scope]: { ...prev.goals[scope], [key]: value } }
+    }));
+  };
+
+  const saveGoals = async (scope?: 'daily' | 'weekly' | 'monthly') => {
+    try {
+      const payload = scope ? ({ [scope]: state.goals[scope] } as Partial<GoalsData>) : state.goals;
+      await ChromeStorageService.updateGoals(payload);
+      const prompts = generateGoalPrompts(state.goals);
+      safeSetState(prev => ({ ...prev, goalPrompts: prompts }));
+      alert('Goals saved successfully');
+    } catch (e) {
+      console.error('Failed to save goals:', e);
+      alert('Failed to save goals');
+    }
+  };
+
+  const average = (arr: number[]) => arr.length ? arr.reduce((a,b)=>a+b,0) / arr.length : 0;
+
+  const dailyAverages = (days: number): { label: string; value: number }[] => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - (days - 1));
+    const result: { label: string; value: number }[] = [];
+
+    for (let i = 0; i < days; i++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      const dayLabel = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      const dayMetrics = userData.metrics.filter(m => {
+        const md = new Date(m.timestamp);
+        return md.toDateString() === date.toDateString();
+      });
+      result.push({ label: dayLabel, value: average(dayMetrics.map(m => m.fatigueIndex)) });
+    }
+    return result;
+  };
+
+  const generateGoalPrompts = (goals: GoalsData) => {
+    const avgFatigueToday = average(
+      userData.metrics.filter(m => new Date(m.timestamp).toDateString() === new Date().toDateString())
+        .map(m => m.fatigueIndex)
+    );
+    const last7 = dailyAverages(7);
+    const last7DaysAvg = last7.length ? last7.reduce((acc, d) => acc + d.value, 0) / last7.length : 0;
+
+    return {
+      daily: `Based on today’s fatigue (~${Math.round(avgFatigueToday || 0)}), aim for ${goals.daily.breaksTarget} breaks and eye score ${goals.daily.eyeScoreTarget}.`,
+      weekly: `Your 7-day average fatigue is ~${Math.round(last7DaysAvg || 0)}. Target consistency ${goals.weekly.consistencyTarget}% and avg score ${goals.weekly.avgScoreTarget}.`,
+      monthly: `Set improvement target ${goals.monthly.improvementTarget}% and streak ${goals.monthly.streakTarget} days to build habit.`
+    };
+  };
+
+  // === Analytics: Trend & Reports ===
+  const computeTrend = (range: 'day' | 'week' | 'month') => {
+    let data: { label: string; value: number }[] = [];
+    if (range === 'day') {
+      // Hourly averages for last 24h
+      const end = new Date();
+      const start = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      for (let h = 0; h < 24; h++) {
+        const hourStart = new Date(start.getTime() + h * 60 * 60 * 1000);
+        const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
+        const label = `${hourStart.getHours()}:00`;
+        const hourMetrics = userData.metrics.filter(m => {
+          const t = m.timestamp;
+          return t >= hourStart.getTime() && t < hourEnd.getTime();
+        });
+        data.push({ label, value: average(hourMetrics.map(m => m.fatigueIndex)) });
+      }
+    } else if (range === 'week') {
+      data = dailyAverages(7);
+    } else {
+      data = dailyAverages(30);
+    }
+    safeSetState(prev => ({ ...prev, chartRange: range, trendData: data }));
+  };
+
+  const getRangeDates = (range: 'day' | 'week' | 'month') => {
+    const end = new Date();
+    const start = new Date();
+    if (range === 'day') start.setDate(end.getDate() - 1);
+    else if (range === 'week') start.setDate(end.getDate() - 7);
+    else start.setDate(end.getDate() - 30);
+    return { startDate: start, endDate: end };
+  };
+
+  const downloadReport = async (range: 'day' | 'week' | 'month') => {
+    try {
+      const { startDate, endDate } = getRangeDates(range);
+      const metrics = await ChromeStorageService.getMetrics(startDate, endDate);
+      const header = 'timestamp,blinkRate,fatigueIndex,posture,earValue,perclosValue';
+      const rows = metrics.map(m => (
+        [new Date(m.timestamp).toISOString(), m.blinkRate, m.fatigueIndex, m.posture, m.earValue, m.perclosValue].join(',')
+      ));
+      const csv = [header, ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `eyezen-${range}-report-${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Failed to download report:', e);
+      alert('Failed to download report');
+    }
+  };
+
+  const TrendChart: React.FC<{ data: { label: string; value: number }[] }> = ({ data }) => {
+    const w = 600, h = 180, p = 24;
+    const values = data.map(d => d.value).filter(v => typeof v === 'number' && !isNaN(v));
+    const max = Math.max(100, ...(values.length ? values : [0]));
+    const min = 0;
+    const toPoint = (v: number, i: number) => {
+      const x = p + (i * (w - 2 * p)) / Math.max(1, (data.length - 1));
+      const y = h - p - ((v - min) / Math.max(1, (max - min))) * (h - 2 * p);
+      return `${x},${y}`;
+    };
+    const points = data.map((d, i) => toPoint(d.value || 0, i)).join(' ');
+    return (
+      <div className="w-full">
+        <svg width={w} height={h} className="w-full h-44">
+          <polyline points={points} fill="none" stroke="#10b981" strokeWidth="2" />
+          {data.map((d, i) => {
+            const [cx, cy] = toPoint(d.value || 0, i).split(',').map(Number);
+            return <circle key={i} cx={cx} cy={cy} r="3" fill="#10b981" />;
+          })}
+        </svg>
+        <div className="grid grid-cols-6 gap-2 mt-2 text-xs text-gray-600">
+          {data.slice(0, 6).map((d, i) => (<span key={i}>{d.label}</span>))}
+        </div>
+      </div>
+    );
   };
 
   const handleLogin = async (email: string, password: string) => {
@@ -965,10 +1138,10 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
       <div className="space-y-8">
         <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 p-8 rounded-2xl shadow-lg border border-indigo-200/50">
           <h3 className="text-2xl font-bold text-indigo-800 mb-2">🎯 Your Eye Health Goals</h3>
-          <p className="text-indigo-600">Track and achieve your personalized eye care objectives</p>
+          <p className="text-indigo-600">Set daily, weekly, and monthly targets</p>
         </div>
         
-        {/* Enhanced Goal Cards */}
+        {/* Goals Cards with inputs & prompts */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-white/30 p-6 hover:shadow-xl transition-all duration-300">
             <div className="flex items-center mb-4">
@@ -980,13 +1153,37 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
                 <p className="text-sm text-gray-600">Today's targets</p>
               </div>
             </div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Breaks taken</span>
-                <span className="font-semibold text-blue-600">6/8</span>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Breaks target</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={state.goals.daily.breaksTarget}
+                    onChange={e => handleGoalChange('daily', 'breaksTarget', Number(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Eye score target</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={state.goals.daily.eyeScoreTarget}
+                    onChange={e => handleGoalChange('daily', 'eyeScoreTarget', Number(e.target.value))}
+                  />
+                </div>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 h-2 rounded-full" style={{width: '75%'}}></div>
+              <div className="text-xs text-blue-700 bg-blue-50 px-3 py-2 rounded-lg">
+                {state.goalPrompts.daily}
+              </div>
+              <div className="flex justify-end">
+                <button onClick={() => saveGoals('daily')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow">
+                  Save Daily
+                </button>
               </div>
             </div>
           </div>
@@ -1001,13 +1198,38 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
                 <p className="text-sm text-gray-600">This week's consistency</p>
               </div>
             </div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Consistency</span>
-                <span className="font-semibold text-green-600">85%</span>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Consistency target (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={state.goals.weekly.consistencyTarget}
+                    onChange={e => handleGoalChange('weekly', 'consistencyTarget', Number(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Average score target</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={state.goals.weekly.avgScoreTarget}
+                    onChange={e => handleGoalChange('weekly', 'avgScoreTarget', Number(e.target.value))}
+                  />
+                </div>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-gradient-to-r from-green-500 to-emerald-600 h-2 rounded-full" style={{width: '85%'}}></div>
+              <div className="text-xs text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg">
+                {state.goalPrompts.weekly}
+              </div>
+              <div className="flex justify-end">
+                <button onClick={() => saveGoals('weekly')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg shadow">
+                  Save Weekly
+                </button>
               </div>
             </div>
           </div>
@@ -1022,13 +1244,37 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
                 <p className="text-sm text-gray-600">Your milestones</p>
               </div>
             </div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Current streak</span>
-                <span className="font-semibold text-purple-600">18 days</span>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Improvement target (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={state.goals.monthly.improvementTarget}
+                    onChange={e => handleGoalChange('monthly', 'improvementTarget', Number(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Streak target (days)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={state.goals.monthly.streakTarget}
+                    onChange={e => handleGoalChange('monthly', 'streakTarget', Number(e.target.value))}
+                  />
+                </div>
               </div>
-              <div className="text-xs text-purple-500 bg-purple-50 px-2 py-1 rounded-full inline-block">
-                🔥 On fire!
+              <div className="text-xs text-purple-700 bg-purple-50 px-3 py-2 rounded-lg">
+                {state.goalPrompts.monthly}
+              </div>
+              <div className="flex justify-end">
+                <button onClick={() => saveGoals('monthly')} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg shadow">
+                  Save Monthly
+                </button>
               </div>
             </div>
           </div>
@@ -1086,52 +1332,99 @@ const Dashboard: React.FC<DashboardProps> = ({ userData, onUpdateSettings, onExp
       <div className="space-y-8">
         <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-8 rounded-2xl shadow-lg border border-emerald-200/50">
           <h3 className="text-2xl font-bold text-emerald-800 mb-2">📊 Analytics & Insights</h3>
-          <p className="text-emerald-600">Detailed analysis of your eye health patterns</p>
+          <p className="text-emerald-600">Track your eye health trends and download reports</p>
         </div>
         
-        {/* Enhanced Analytics Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-white/30 p-6">
-            <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
-              <span className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center mr-3">
+        {/* Range Selection */}
+        <div className="flex justify-center space-x-4 mb-6">
+          {(['day', 'week', 'month'] as const).map(range => (
+            <button
+              key={range}
+              onClick={() => computeTrend(range)}
+              className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                state.chartRange === range
+                  ? 'bg-emerald-600 text-white shadow-lg'
+                  : 'bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-50'
+              }`}
+            >
+              {range.charAt(0).toUpperCase() + range.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* Trend Chart */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-white/30 p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h4 className="text-lg font-bold text-gray-800 flex items-center">
+              <span className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center mr-3">
                 <span className="text-white text-sm">📈</span>
               </span>
-              Weekly Trend
+              Eye Fatigue Trend ({state.chartRange})
             </h4>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Average Score</span>
-                <span className="font-semibold text-blue-600">84/100</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Improvement</span>
-                <span className="font-semibold text-green-600">+15%</span>
-              </div>
-              <div className="bg-gradient-to-r from-blue-100 to-green-100 p-4 rounded-xl">
-                <p className="text-sm text-gray-700">📊 Your eye health has improved significantly this week!</p>
-              </div>
-            </div>
+            <button
+              onClick={() => downloadReport(state.chartRange)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg shadow flex items-center space-x-2"
+            >
+              <span>📥</span>
+              <span>Download CSV</span>
+            </button>
           </div>
           
+          {state.trendData.length > 0 ? (
+            <TrendChart data={state.trendData} />
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <p>No data available for the selected range</p>
+            </div>
+          )}
+        </div>
+
+        {/* Summary Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-white/30 p-6">
-            <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
-              <span className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center mr-3">
-                <span className="text-white text-sm">⏰</span>
-              </span>
-              Break Patterns
-            </h4>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Most Active Time</span>
-                <span className="font-semibold text-emerald-600">2-4 PM</span>
+            <div className="flex items-center mb-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center mr-4">
+                <span className="text-white text-xl">📊</span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Average Break Duration</span>
-                <span className="font-semibold text-emerald-600">3.2 min</span>
+              <div>
+                <h4 className="font-bold text-gray-800">Average Score</h4>
+                <p className="text-sm text-gray-600">Current period</p>
               </div>
-              <div className="bg-gradient-to-r from-green-100 to-emerald-100 p-4 rounded-xl">
-                <p className="text-sm text-gray-700">💡 Consider longer breaks in the afternoon for better results!</p>
+            </div>
+            <div className="text-2xl font-bold text-blue-600">
+              {state.trendData.length > 0 
+                ? Math.round(state.trendData.reduce((acc, d) => acc + (d.value || 0), 0) / state.trendData.length)
+                : 0}
+            </div>
+          </div>
+
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-white/30 p-6">
+            <div className="flex items-center mb-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mr-4">
+                <span className="text-white text-xl">📈</span>
               </div>
+              <div>
+                <h4 className="font-bold text-gray-800">Data Points</h4>
+                <p className="text-sm text-gray-600">Measurements</p>
+              </div>
+            </div>
+            <div className="text-2xl font-bold text-emerald-600">
+              {state.trendData.length}
+            </div>
+          </div>
+
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-white/30 p-6">
+            <div className="flex items-center mb-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center mr-4">
+                <span className="text-white text-xl">⏱️</span>
+              </div>
+              <div>
+                <h4 className="font-bold text-gray-800">Range</h4>
+                <p className="text-sm text-gray-600">Time period</p>
+              </div>
+            </div>
+            <div className="text-2xl font-bold text-purple-600 capitalize">
+              {state.chartRange}
             </div>
           </div>
         </div>

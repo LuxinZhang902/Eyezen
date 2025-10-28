@@ -22,7 +22,9 @@ import {
   EyeMetrics, 
   BreakSession, 
   UserEvent, 
-  DEFAULT_SETTINGS 
+  DEFAULT_SETTINGS,
+  GoalsData,
+  DEFAULT_GOALS
 } from '../../types/index';
 
 /**
@@ -36,7 +38,8 @@ export class ChromeStorageService {
     METRICS: 'eyezen_metrics',
     BREAKS: 'eyezen_breaks',
     EVENTS: 'eyezen_events',
-    LAST_SYNC: 'eyezen_last_sync'
+    LAST_SYNC: 'eyezen_last_sync',
+    GOALS: 'eyezen_goals'
   };
 
   /**
@@ -343,6 +346,46 @@ export class ChromeStorageService {
     } catch (error) {
       console.error('Failed to import data:', error);
       throw new Error('Failed to import data');
+    }
+  }
+
+  /**
+   * Get user goals
+   */
+  static async getGoals(): Promise<GoalsData> {
+    try {
+      if (!this.isChromeApiAvailable()) {
+        console.warn('Chrome API not available, returning default goals');
+        return DEFAULT_GOALS;
+      }
+      const result = await chrome.storage.local.get([this.STORAGE_KEYS.GOALS]);
+      const stored = result[this.STORAGE_KEYS.GOALS];
+      return stored || DEFAULT_GOALS;
+    } catch (error) {
+      console.error('Failed to get goals:', error);
+      return DEFAULT_GOALS;
+    }
+  }
+
+  /**
+   * Update user goals
+   */
+  static async updateGoals(newGoals: Partial<GoalsData>): Promise<void> {
+    try {
+      const current = await this.getGoals();
+      const merged: GoalsData = {
+        daily: { ...current.daily, ...(newGoals.daily || {}) },
+        weekly: { ...current.weekly, ...(newGoals.weekly || {}) },
+        monthly: { ...current.monthly, ...(newGoals.monthly || {}) }
+      };
+      if (!this.isChromeApiAvailable()) {
+        console.warn('Chrome API not available, skipping goals update');
+        return;
+      }
+      await chrome.storage.local.set({ [this.STORAGE_KEYS.GOALS]: merged });
+    } catch (error) {
+      console.error('Failed to update goals:', error);
+      throw new Error('Failed to update goals');
     }
   }
 }

@@ -186,3 +186,21 @@ export type RequiredFields<T, K extends keyof T> = T & Required<Pick<T, K>>;
 export type OptionalFields<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
 export declare const DEFAULT_SETTINGS: UserSettings;
 export declare const MASSAGE_POINTS: Record<MassagePointType, MassagePoint>;
+export interface GoalsData {
+    daily: {
+        breaksTarget: number;
+        eyeScoreTarget: number;
+        notes?: string;
+    };
+    weekly: {
+        consistencyTarget: number;
+        avgScoreTarget: number;
+        notes?: string;
+    };
+    monthly: {
+        improvementTarget: number;
+        streakTarget: number;
+        notes?: string;
+    };
+}
+export declare const DEFAULT_GOALS: GoalsData;

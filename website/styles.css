@@ -183,3 +183,10 @@ html, body { margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-syst
 
 .glow-on .mock-window::before { opacity: 0.55; filter: blur(22px); }
 .orbs.paused .orb { animation-play-state: paused; }
+
+/* Contact section styles */
+.contact { padding: 56px 0; border-top: 1px solid var(--border); }
+.contact-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.contact-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.contact-card h3 { margin: 0 0 6px; }
+@media (max-width: 600px) { .contact-grid { grid-template-columns: 1fr; } }

@@ -112,3 +112,69 @@ if (hero && tiltWindow) {
     if (orbs) orbs.style.transform = '';
   });
 }
+
+// Contact section configuration
+(function configureContactEmail() {
+  const contactEmailEl = document.getElementById('contactEmail');
+  if (!contactEmailEl) return;
+
+  const defaultEmail = 'lona.zhang92@gmail.com';
+  const params = new URLSearchParams(window.location.search);
+  const paramEmail = params.get('contact');
+  const storedEmail = localStorage.getItem('contactEmail');
+
+  let email = defaultEmail;
+  if (paramEmail && paramEmail.includes('@')) {
+    email = paramEmail;
+    localStorage.setItem('contactEmail', paramEmail);
+  } else if (storedEmail && storedEmail.includes('@')) {
+    email = storedEmail;
+  } else {
+    // Persist default so future loads keep your email
+    localStorage.setItem('contactEmail', defaultEmail);
+  }
+
+  contactEmailEl.textContent = email;
+  contactEmailEl.setAttribute('href', `mailto:${email}`);
+
+  // Update any references (like alerts) to use the same email
+  window.CONTACT_EMAIL = email;
+})();
+
+// Determine if GitHub repo is public, then control Issues button behavior
+let isRepoPublic = false;
+async function checkRepoPublic() {
+  try {
+    const resp = await fetch('https://api.github.com/repos/eyezen/chrome-extension', {
+      headers: { 'Accept': 'application/vnd.github+json' },
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      isRepoPublic = !data.private;
+    } else {
+      isRepoPublic = false;
+    }
+  } catch (err) {
+    isRepoPublic = false;
+  }
+}
+
+// Contact section: control Issues button
+const contactIssuesBtn = document.getElementById('contactIssuesBtn');
+if (contactIssuesBtn) {
+  // Run check once on load
+  checkRepoPublic();
+
+  contactIssuesBtn.addEventListener('click', async (e) => {
+    // Re-check quickly (covers first click before async completes)
+    if (isRepoPublic === false) {
+      await checkRepoPublic();
+    }
+    if (!isRepoPublic) {
+      e.preventDefault();
+      const fallbackEmail = window.CONTACT_EMAIL || 'lona.zhang92@gmail.com';
+      alert(`GitHub Issues are not available yet. Please email ${fallbackEmail}.`);
+    }
+    // else allow default navigation to the issues page
+  });
+}
